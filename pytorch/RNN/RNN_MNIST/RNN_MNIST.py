@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from numpy import vstack
 from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, average_precision_score
 from sklearn.metrics import confusion_matrix, recall_score, f1_score
+from sklearn.metrics import classification_report
+from sklearn import metrics
 import math
 
 
@@ -79,67 +81,43 @@ def train(num_epochs, model, train_loader):
 # Evaluating the model
 # ==============================================================
 def evaluate_model(test_loader, model):
+
+    idx = 0
     model.eval()
     with torch.no_grad():
-        preds = []
-        actuals = []
+        correct = 0
+        total = 0
+
         for images, labels in test_loader:
             images = images.reshape(-1, sequence_length, input_size).to(device)
+            print(images[0].shape)
             labels = labels.to(device)
             outputs = model(images)
 
             # Get the class labels(preds)
             # torch.max return 2 values (max_values, index). #dim=1 => maximum in each row
             _, yhat = torch.max(outputs.data, 1)
-            # Using detach to get the numerical values in an ndarray, instead of tensor
-            yhat = yhat.detach().numpy()
-            # total = total + labels.size(0)
-            # correct = correct + (preds == labels).sum().item()
-            # print('Test Accuracy of the model on the 10000 test images: {} %'.format(100 * correct / total))
 
-            # Set the actual label to a numpy() array
+            # for confusion matrix
+            preds = yhat.detach().numpy()
             actual = labels.numpy()
-            # actual = actual.reshape((len(actual), 1))
-            preds.extend(yhat)
-            actuals.extend(actual)
+            # target_names = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+            print(classification_report(actual, preds))
 
-            # Stack the predictions and actual arrays vertically
-        
-    preds, actuals = vstack(preds), vstack(actuals)
-    print("+ len(preds): ", len(preds))
-    print("+ len(actuals): ", len(actuals))
-    
-    # Calculate metrics
-    print(confusion_matrix(actuals, preds))
-    exit(1)
-    
-    # Get descriptions of tn, fp, fn, tp
-    tn, fp, fn, tp = cm.ravel()
-    total = sum(cm.ravel())
+            total = total + labels.size(0)
+            correct = correct + (yhat == labels).sum().item()
+            print('Bacht {} - Accuracy: {} %'.format(idx, 100 * correct / total))
 
-    metrics = {
-        'accuracy': accuracy_score(actuals, preds, average='weighted'),
-        'f1_score': f1_score(actuals, preds),
-        'average_precision_score': average_precision_score(actuals, preds),
-        'matthews_correlation_coefficient': (tp*tn - fp*fn) / math.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn)),
-        'precision': precision_score(actuals, preds),
-        'recall': recall_score(actuals, preds),
-        'true_positive_rate_TPR':recall_score(actuals, preds),
-        'false_positive_rate_FPR':fp / (fp + tn) ,
-        'false_discovery_rate': fp / (fp +tp),
-        'false_negative_rate': fn / (fn + tp) ,
-        'negative_predictive_value': tn / (tn+fn),
-        'misclassification_error_rate': (fp+fn)/total ,
-        'sensitivity': tp / (tp + fn),
-        'specificity': tn / (tn + fp),
-        #'confusion_matrix': confusion_matrix(actuals, preds), 
-        'TP': tp,
-        'FP': fp, 
-        'FN': fn, 
-        'TN': tn
-    }
+            # increase the index number
+            idx = idx + 1
+
+            # plot confusion matrix
+            disp = metrics.ConfusionMatrixDisplay.from_predictions(actual, preds)
+            disp.figure_.suptitle("Confusion Matrix")
+            print(f"Confusion matrix:\n{disp.confusion_matrix}")
+            plt.show()
     
-    return metrics, preds, actuals
+    return 0
 
 
 
@@ -166,19 +144,22 @@ test_data = datasets.MNIST(root = './data', train = False, transform = ToTensor(
 
 # Dataloader for train and test
 train_loader = DataLoader(dataset = train_data, batch_size = batch_size, shuffle = True, num_workers=0)
-test_loader = DataLoader(dataset = test_data, batch_size = batch_size, shuffle = True, num_workers=0)
+test_loader = DataLoader(dataset = test_data, batch_size = 10000, shuffle = True, num_workers=0)
 
+# ==============================================================
 # Visualization of MNIST dataset
-# Plot one train_data
-# plt.imshow(train_data.data[0], cmap='gray')
-# plt.title('%i' % train_data.targets[0])
+# ==============================================================
+# Plot the first image in test loader
+# plt.imshow(test_data.data[0], cmap='gray')
+# plt.title('%i' % test_data.targets[0])
 # plt.show()
+
 # Plot multiple train data
 # figure = plt.figure(figsize=(10, 8))
 # cols, rows = 5, 5
 # for i in range(1, cols * rows + 1):
-#     sample_idx = torch.randint(len(train_data), size=(1,)).item()
-#     img, label = train_data[sample_idx]
+#     sample_idx = torch.randint(len(test_data), size=(1,)).item()
+#     img, label = test_data[sample_idx]
 #     figure.add_subplot(rows, cols, i)
 #     plt.title(label)
 #     plt.axis("off")
@@ -188,8 +169,8 @@ test_loader = DataLoader(dataset = test_data, batch_size = batch_size, shuffle =
 # ==============================================================
 # Call and train model
 # ==============================================================
+print("Initializing RNN model ...\n")
 model = RNN(input_size, hidden_size, num_layers, num_classes).to(device)
-print(model)
 
 # train(num_epochs, model, train_loader)
 
@@ -197,30 +178,24 @@ print(model)
 # torch.save(model, "./trained_model/pytorch_rnn_mnist.model")
 
 # load the trained model
+print("Loading the trained RNN model ...\n")
 model = torch.load("./trained_model/pytorch_rnn_mnist.model")
 
-# Test the model
-# model.eval()
-# with torch.no_grad():
-#     correct = 0
-#     total = 0
-#     for images, labels in test_loader:
-#         images = images.reshape(-1, sequence_length, input_size).to(device)
-#         labels = labels.to(device)
-#         outputs = model(images)
-#         _, predicted = torch.max(outputs.data, 1)
-#         total = total + labels.size(0)
-#         correct = correct + (predicted == labels).sum().item()
-# print('Test Accuracy of the model on the 10000 test images: {} %'.format(100 * correct / total))
-
-
 # get some random training images
+# print("Evaluating the model ...\n")
 results = evaluate_model(test_loader, model)
+
 # sample = next(iter(test_loader))
 # imgs, lbls = sample
+# print("len(imgs):{}, len(lbls):{}".format(len(imgs), len(lbls)))
 
-# test_output = model(imgs[:10].view(-1, 28, 28))
+# test_output = model(imgs[:].view(-1, 28, 28))
 # predicted = torch.max(test_output, 1)[1].data.numpy().squeeze()
-# labels = lbls[:10].numpy()
-# print(f"Predicted number: {predicted}")
-# print(f"Actual number: {labels}")
+# labels = lbls[:].numpy()
+# target_names = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+# print(classification_report(labels, predicted, target_names=target_names))
+
+# disp = metrics.ConfusionMatrixDisplay.from_predictions(lbls, predicted)
+# disp.figure_.suptitle("Confusion Matrix")
+# print(f"Confusion matrix:\n{disp.confusion_matrix}")
+# plt.show()
