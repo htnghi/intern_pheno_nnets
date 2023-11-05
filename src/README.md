@@ -1,2 +1,9 @@
-# Phenotype Prediction by using Deelp Neural Nets
-There are all materials for building a model to predict phenotype.
+## Implementation - Neural Network Models for Phenotype Prediction
+
+The implementation is structured as follows.
+
+### main.py
+
+### preprocess
+
+### model
