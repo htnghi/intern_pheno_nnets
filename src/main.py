@@ -1,41 +1,77 @@
+import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Read data by pandas
-df_genotypes = pd.read_csv('x_matrix.csv')
-df_phenotypes = pd.read_csv('y_matrix.csv')
+from models.RNN import *
+from models.MLP import *
+from preprocess.encode_data import *
 
-# Some basis summary about the dataset
-print('Number of Samples:\t%d' %df_genotypes.shape[0]) #2029
-print('Number of Features:\t%d' %(df_genotypes.shape[1]-1)) #2000
-print('Number of Corresponding phenotype values:\t%d' %df_phenotypes.shape[0]) #1163
-print('---------------------------------------------')
+if __name__ == '__main__':
+    """
+    Run the main.py file to start the program:
+        + Process the input arguments
+        + Read data
+        + Preprocess data
+        + Train models
+        + Prediction
+    """
 
-# Mapping orders samples of genotypes to phenotypes
-phenotype_dict_arr = df_phenotypes.set_index('sample_id').to_dict()['continuous_values']
-df_genotypes['biomass'] = df_genotypes['sample_id'].map(phenotype_dict_arr) # add label column to genotypes data
-X = df_genotypes.iloc[:,1:df_genotypes.shape[1]-1].to_numpy()
-y = df_genotypes.iloc[:,df_genotypes.shape[1]-1].to_numpy()
+    # ----------------------------------------------------
+    # Process the arguments
+    # ----------------------------------------------------
+    parser = argparse.ArgumentParser()
 
-print('Shape of X: \t', X.shape)
-print(X)
-print('Shape of y: \t', y.shape)
-print(y)
+    parser.add_argument("-dd", "--data_dir", type=str,
+                        default='/Users/nghihuynh/Documents/MscTUM_BioTech/4th_semester/Internship/intern_pheno_nnets/src/data',
+                        help="Path to the data folder")
+    
+    parser.add_argument("-enc", "--encode", type=str,
+                        default='012',
+                        help="Mode for encoding the datasets")
+    
+    parser.add_argument("-mod", "--model", type=str,
+                        default='RNN',
+                        help="NNet model for training the phenotype prediction")
 
-#df_phenotypes.dropna()
-common_samples = df_phenotypes['sample_id'].unique()
+    args = vars(parser.parse_args())
 
-# Filter both DataFrames to retain only common samples
-df_genotypes = df_genotypes[df_genotypes['sample_id'].isin(common_samples)]
-df_phenotypes = df_phenotypes[df_phenotypes['sample_id'].isin(common_samples)]
-X1 = df_genotypes.iloc[:,1:df_genotypes.shape[1]-1].to_numpy()
-y1 = df_genotypes.iloc[:,df_genotypes.shape[1]-1].to_numpy()
-print('Shape of X1: \t', X1.shape)
-print(X1)
-print('Shape of y1: \t', y1.shape)
-print(y1)
+    # ----------------------------------------------------
+    # Read data and preprocess
+    # ----------------------------------------------------
+    datapath = args["data_dir"]
+    # print("Data dir: ", datapath)
+    # print('-----------------------------------------------\n')
 
-print('count nan value of genotype: \t',df_genotypes.isnull().sum().sum())
-print('count nan value of phenotype: \t',df_phenotypes.isnull().sum().sum())
-print(df_phenotypes.isnull().any(axis=1))
+    read_data(datapath)
+    X, y = read_prerocessed_data(datapath)
+    # print("Data after preprocessing: ")
+    # print(X)
+    # print(y)
+    # print('-----------------------------------------------\n')
+
+    # ----------------------------------------------------
+    # Encode data
+    # ----------------------------------------------------
+    # X_additive_encoded = get_additive_encoding(X)
+    # print("Data after additive encoding: ")
+    # print(X_additive_encoded)
+    # print('-----------------------------------------------\n')
+
+    X_onehot_encoded = get_onehot_encoding(X)
+    # print("Data after one-hot encoding: ")
+    # print(X_onehot_encoded)
+    # print('-----------------------------------------------\n')
+
+    #y_onehot_encoded = y_onehot(y)
+    # print("Data after one-hot encoding: ")
+    # print(y_onehot_encoded)
+    # print('-----------------------------------------------\n')
+
+    # ----------------------------------------------------
+    # Train model
+    # ----------------------------------------------------
+    model = run_train_RNN(X_onehot_encoded, y)
+
+    #model = run_train_RNN(X_onehot_encoded, y_onehot_encoded)
+    
