@@ -8,14 +8,6 @@ from models.MLP import *
 from preprocess.encode_data import *
 
 if __name__ == '__main__':
-    """
-    Run the main.py file to start the program:
-        + Process the input arguments
-        + Read data
-        + Preprocess data
-        + Train models
-        + Prediction
-    """
 
     # ----------------------------------------------------
     # Process the arguments
@@ -73,5 +65,5 @@ if __name__ == '__main__':
     # ----------------------------------------------------
     model = run_train_RNN(X_onehot_encoded, y)
 
-    #model = run_train_RNN(X_onehot_encoded, y_onehot_encoded)
+    #model = run_train_MLP(X_onehot_encoded, y)
     
