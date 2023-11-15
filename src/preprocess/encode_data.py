@@ -76,3 +76,16 @@ def read_prerocessed_data(datapath):
 
     return X_nparray, y_nparray
 
+def split_train_test(X_nparray, y_nparray):
+    # Train dataset
+    X_train = X_nparray[0:X_nparray.shape[0]-50, :]
+    y_train = y_nparray[0:X_nparray.shape[0]-50]
+    # print(X_train.shape, y_train.shape) #(450,10000) (450,)
+    
+    # Test dataset: 50 last values
+    X_test = X_nparray[-50:X_nparray.shape[0], :]
+    y_test = y_nparray[-50:X_nparray.shape[0]]
+    #print(X_test.shape, y_test.shape) #(50, 10000) (50,)
+
+    return X_train, y_train, X_test, y_test
+

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 from models.RNN import *
 from models.MLP import *
+from models.CNN import *
 from preprocess.encode_data import *
 
 if __name__ == '__main__':
@@ -35,12 +36,15 @@ if __name__ == '__main__':
     # print("Data dir: ", datapath)
     # print('-----------------------------------------------\n')
 
-    read_data(datapath)
+    # read_data(datapath)
     X, y = read_prerocessed_data(datapath)
     # print("Data after preprocessing: ")
     # print(X)
     # print(y)
     # print('-----------------------------------------------\n')
+
+    # split_train_test
+    X_train, y_train, X_test, y_test = split_train_test(X,y)
 
     # ----------------------------------------------------
     # Encode data
@@ -50,7 +54,7 @@ if __name__ == '__main__':
     # print(X_additive_encoded)
     # print('-----------------------------------------------\n')
 
-    X_onehot_encoded = get_onehot_encoding(X)
+    # X_onehot_encoded = get_onehot_encoding(X)
     # print("Data after one-hot encoding: ")
     # print(X_onehot_encoded)
     # print('-----------------------------------------------\n')
@@ -63,7 +67,9 @@ if __name__ == '__main__':
     # ----------------------------------------------------
     # Train model
     # ----------------------------------------------------
-    model = run_train_RNN(X_onehot_encoded, y)
+    # model = run_train_RNN(X, y)
 
-    #model = run_train_MLP(X_onehot_encoded, y)
+    model = run_train_CNN(X_train, y_train)
+
+    # model = run_train_MLP(X, y)
     
