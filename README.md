@@ -41,19 +41,18 @@ Get independent test dataset and train dataset:
 - Test set: (50,10000)
 
 <!-- ![image info](./figures/overview_training.svg) -->
-<img src='./figures/overview_training.svg' width=70% height=70%>
+<img src='./figures/overview_training.svg' width=60% height=60%>
 
 ### 3. Model architecture and Tuning model 
 
 <img src='./figures/models_architecture.svg'>
 
-
 ### 4. Result
 
 * MLP model: with tuning by Optuna
 
-<img src='./figures/MLP_loss.svg' width=47% height=47%>
-<img src='./figures/MLP_preds_groundtrue.svg' width=40% height=40%>
+<img src='./figures/MLP_loss.svg' width=40% height=40%>
+<img src='./figures/MLP_preds_groundtrue.svg' width=33% height=33%>
 
 (Left: MLP training loss --- Right: Prediction results)
 
@@ -61,8 +60,8 @@ Test - Average:   loss = 0.015, ExpVar = 0.607, R2 = 0.604, MAE = 0.098
 
 * CNN model: not yet tuned
 
-<img src='./figures/CNN_loss.svg' width=47% height=47%>
-<img src='./figures/CNN_preds_groundtrue.svg' width=40% height=40%>
+<img src='./figures/CNN_loss.svg' width=40% height=40%>
+<img src='./figures/CNN_preds_groundtrue.svg' width=33% height=33%>
 
 (Left: CNN training loss --- Right: Prediction results)
 
