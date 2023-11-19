@@ -28,7 +28,7 @@ y: (500, 1)
 #### Data preprocessing:
 
 <!-- ![image info](./figures/overview_datapreprocessing.svg) -->
-<img src='./figures/overview_datapreprocessing.svg' width=50% height=50%>
+<img src='./figures/overview_datapreprocessing.svg' width=60% height=60%>
 
 * Data Standardization by Z-Score
 * Min-Max Scaler for Label y
@@ -41,34 +41,35 @@ Get independent test dataset and train dataset:
 - Test set: (50,10000)
 
 <!-- ![image info](./figures/overview_training.svg) -->
-<img src='./figures/overview_training.svg' width=50% height=50%>
+<img src='./figures/overview_training.svg' width=70% height=70%>
 
 ### 3. Model architecture and Tuning model 
 
-<img src='./figures/models_architecture.svg' width=80% height=80%>
+<img src='./figures/models_architecture.svg'>
 
 
 ### 4. Result
 
-* MLP model: with tuning by <strong>Optuna<strong>
+* MLP model: with tuning by Optuna
 
-<img src='./figures/MLP_loss.svg' width=35% height=35%>
-<img src='./figures/MLP_preds_groundtrue.svg' width=30% height=30%>
+<img src='./figures/MLP_loss.svg' width=47% height=47%>
+<img src='./figures/MLP_preds_groundtrue.svg' width=40% height=40%>
 
-(MLP training loss and Prediction results)
+(Left: MLP training loss --- Right: Prediction results)
 
 Test - Average:   loss = 0.015, ExpVar = 0.607, R2 = 0.604, MAE = 0.098
 
 * CNN model: not yet tuned
 
-<img src='./figures/CNN_loss.svg' width=35% height=35%>
-<img src='./figures/CNN_preds_groundtrue.svg' width=30% height=30%>
+<img src='./figures/CNN_loss.svg' width=47% height=47%>
+<img src='./figures/CNN_preds_groundtrue.svg' width=40% height=40%>
 
-(CNN training loss and Prediction results)
+(Left: CNN training loss --- Right: Prediction results)
 
 Test - Average:   loss = 0.050, ExpVar = -0.372, R2 = -0.966, MAE = 0.186
 
 ### 5. Next step
+* Using One-hot encoding
 * Tuning CNN model with Optuna
 * RNN implemented by Pytorch + Tuning with Optuna
 
