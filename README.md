@@ -2,56 +2,86 @@
 
 This project is about trying and testing deep neural networks for predicting phenotype from genotype datasets. The target is a comparison between classical machine learning models and deep neural network models in phenotype prediction. The following summarizes how the datasets look like and which models are used in this project.
 
-### Played around with RNN, CNN, MLP and sample datasets
+### TODO with RNN, CNN, MLP implementation
 
-Have tried to get familiar with RNN, CNN, MLP implemented by Pytorch. The sample datasets that I have used as follows
+Have tried to get familiar with RNN, CNN, MLP implemented by Pytorch. Now, need to implement these models as general outsources, such as
+- [x] MLP implemented by Pytorch
+- [x] CNN implemented by Pytorch
+- [ ] RNN implemented by Pytorch
 
-![image info](./figures/rnn_cnn_mlp_exp_overview.png)
+<!-- ![image info](./figures/rnn_cnn_mlp_exp_overview.png) -->
 
-### Review an SNP dataset example: from the lecture Introduction AI for Bioinformatic (Prof. Grimm)
+### 1. Preprocessing SNP dataset
 
-The sample dataset last year looked like:
-<!-- X: (1826, 5000) -->
-<!-- y: (1826,) -->
-
-```python
-    sample_ids, ..., ...
-    9787, 'G' 'G' 'G' ... '?' 'T' 'A',
-    9788, 'G' 'G' 'G' ... 'A' 'T' 'A',
-    9789, 'A' 'G' 'A' ... 'A' '?' 'A',
-    9790, ...
-```
-
-### Tried 2 methods for encoding data
-
-<strong>One-hot encoding</strong>: a common method for dealing with categorical data. We convert each categorical value into a new categorical column and assign a binary value of 1 or 0 to those columns. Each integer value is represented as a binary vector. All the values are zero, and the index is marked with a 1. For example,
+The dataset of pheno1 looks like:
+X: (500, 10000); 
+y: (500, 1)
 
 ```python
-        A   C   G   T
-    A:  1   0   0   0
-    C:  0   1   0   0
-    G:  0   0   1   0
-    T:  0   0   0   1
+    sample_ids, ..., ...     pheno1
+    9387, 2 0 0 2 0 0 0 ...  7.9124
+    9367, 2 2 0 0 0 0 0 ...  12.654
+    9356, 2 0 0 0 0 2 0 ...  8.6401
+    9355, ...
 ```
 
-<strong>SNP additive encoding</strong>: each genotype is encoded as a single numeric feature that reflects the number of minor alleles. Homozygous major, heterozygous and homozygous minor are encoded as 0, 1 and 2, respectively.
+#### Data preprocessing:
 
-```python
-    sample_ids, ..., ...
-    9787, 0 2 0 ... 2 0 0,
-    9788, 0 0 2 ... 0 0 0,
-    9789, 0 0 0 ... 0 2 0,
-    9790, ...
-```
+<!-- ![image info](./figures/overview_datapreprocessing.svg) -->
+<img src='./figures/overview_datapreprocessing.svg' width=50% height=50%>
 
-Refers to the researches from [Song et al.](https://doi.org/10.3389/frai.2022.1028978), and [Kim et al.](https://doi.org/10.1371%2Fjournal.pone.0236139), there are several common methods to encode the genotype datasets, such as
-* One-hot encoding 
-* Ordinally (or categorically) encoded genotypes
+* Data Standardization by Z-Score
+* Min-Max Scaler for Label y
+* Outliers Detection & Dimension Reduction(PCA)
 
-### Tried to apply the neural network models above
 
-Have tried to apply RNN and MLP above with the SNP-example dataset from the lecture last year. However, the result and optimization are not yet done ...
+### 2. Training Strategy
+Get independent test dataset and train dataset:
+- Train dataset(including validation): (450, 10000)
+- Test set: (50,10000)
 
-![image info](./figures/apply_rnn_mlp_to_snp_data_example_overview.png)
+<!-- ![image info](./figures/overview_training.svg) -->
+<img src='./figures/overview_training.svg' width=50% height=50%>
 
-<!-- The 3 popular types include: MLP, CNN and RNN, read more at [here](https://www.analyticsvidhya.com/blog/2020/02/cnn-vs-rnn-vs-mlp-analyzing-3-types-of-neural-networks-in-deep-learning/). -->
+### 3. Model architecture and Tuning model 
+
+<img src='./figures/models_architecture.svg' width=80% height=80%>
+
+
+### 4. Result
+
+* MLP model: with tuning by <strong>Optuna<strong>
+
+<img src='./figures/MLP_loss.svg' width=35% height=35%>
+<img src='./figures/MLP_preds_groundtrue.svg' width=30% height=30%>
+
+(MLP training loss and Prediction results)
+
+Test - Average:   loss = 0.015, ExpVar = 0.607, R2 = 0.604, MAE = 0.098
+
+* CNN model: not yet tuned
+
+<img src='./figures/CNN_loss.svg' width=35% height=35%>
+<img src='./figures/CNN_preds_groundtrue.svg' width=30% height=30%>
+
+(CNN training loss and Prediction results)
+
+Test - Average:   loss = 0.050, ExpVar = -0.372, R2 = -0.966, MAE = 0.186
+
+### 5. Next step
+* Tuning CNN model with Optuna
+* RNN implemented by Pytorch + Tuning with Optuna
+
+### 6. Questions
+(1) The features dimension of X is too large (10000 features) + the matrix X only contains 0 and 2. 
+* -> technique for reducing the numbers of features and extracting only the valuale features
+
+(2) y label used Min Max Scaler -> when training model, loss MSE is very low, however the explained variance doesn't make sense. 
+* -> technique for scailing y lael
+
+(3) CNN model is mainly used for classification task.
+* -> CNN architecture is specialized for regression.
+
+
+
+
