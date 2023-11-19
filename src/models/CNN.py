@@ -19,7 +19,7 @@ from torch.nn import Linear
 from torch.nn import ReLU, Softplus
 from torch.nn import Sigmoid
 from torch.nn import Module, Sequential
-from torch.nn import MaxPool1d, Conv1d, Flatten, LeakyReLU
+from torch.nn import MaxPool1d, Conv1d, Flatten, LeakyReLU, BatchNorm1d, Dropout
 from torch.optim import SGD, Adam
 from torch.nn import MSELoss
 from torch.nn.init import kaiming_uniform_
@@ -38,29 +38,37 @@ class CNN1D(Module):
         super(CNN1D, self).__init__()
 
         self.model = Sequential(
-            Conv1d(1, 16,   kernel_size=3, stride=1, padding=1),
-            MaxPool1d(2),
+            Conv1d(1, 4,   kernel_size=3, stride=1, padding=1),
+            ReLU(),
+            BatchNorm1d(4),
 
-            Conv1d(16, 64,  kernel_size=3, stride=1, padding=1),
-            MaxPool1d(2),
+            Conv1d(4, 16,  kernel_size=3, stride=1, padding=1),
+            ReLU(),
+            BatchNorm1d(16),
 
-            Conv1d(64, 128, kernel_size=3, stride=1, padding=1),
+            Conv1d(16, 64, kernel_size=3, stride=1, padding=1),
+            ReLU(),
+            BatchNorm1d(64),
             MaxPool1d(2),
         )
 
         self.linear = Sequential(
-            Linear(4736, 512),
+            Linear(9600, 512),
             LeakyReLU(inplace=True),
+            BatchNorm1d(512),
+            Dropout(0.5),
             Linear(512, n_outputs),
         )
 
 
     def forward(self,X):
+        #print('shape initial:', X.shape) #torch.Size([batch_size=50, 1, 300])
+        
         X = self.model(X)
-        # print('shape after conv:', X.shape) #torch.Size([100, 128, 1250])
+        # print('shape after conv:', X.shape) #torch.Size([batch_size=50, 64, 150])
 
         X = X.view(X.size(0), -1)
-        # print('shape after flatten:', X.shape)  #torch.Size([100, 160000])
+        # print('shape after flatten:', X.shape)  #torch.Size([batch_size, 9600])
 
         X = self.linear(X)
 
@@ -177,10 +185,9 @@ def train_model(num_epochs, model, X, y, learning_rate, k_folds, batch_size):
             val_exp_variance_sum = 0.0 
             val_r2_sum = 0.0
             val_mae_sum = 0.0
-            
+
             # training loop with train_loader --------------------------------------------
             for i, (inputs, targets) in enumerate(train_loader):
-            
                 # call model train
                 model.train()
                 # get predicted outputs
@@ -282,7 +289,7 @@ def run_train_CNN(X_train, y_train, X_test):
     tensor_X, tensor_y = to_tensor(X_scaled, y_scaled)
 
     # unsqueeze 2D array to convert it into 3D array
-    tensor_X = tensor_X.unsqueeze(1)
+    tensor_X = tensor_X.unsqueeze(1) #torch.size(450, 1, 10000)
 
     # Call model
     model = CNN1D(n_outputs)
