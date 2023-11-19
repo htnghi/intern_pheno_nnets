@@ -47,29 +47,27 @@ Get independent test dataset and train dataset:
 
 <img src='./figures/models_architecture.svg'>
 
-### 4. Result
+### 4. Results - evaluating the model in test set
 
-* MLP model: with tuning by Optuna
+* **(1) MLP model**: with tuning by Optuna
 
 <p float="left">
   <img src='./figures/MLP_loss.svg' width=40% height=40% />
   <img src='./figures/MLP_preds_groundtrue.svg' width=35% height=35% /> 
 </p>
+<code>&nbsp;&nbsp;&nbsp;&nbsp;</code><code>&nbsp;&nbsp;&nbsp;&nbsp;</code>(Left: MLP training loss --- Right: Prediction results)
 
-(Left: MLP training loss --- Right: Prediction results)
+Test MLP - Average:   loss = 0.015, ExpVar = 0.607, R2 = 0.604, MAE = 0.098
 
-Test - Average:   loss = 0.015, ExpVar = 0.607, R2 = 0.604, MAE = 0.098
-
-* CNN model: not yet tuned
+* **(2) CNN model**: not yet tuned
 
 <p float="left">
   <img src='./figures/CNN_loss.svg' width=40% height=40% />
   <img src='./figures/CNN_preds_groundtrue.svg' width=35% height=35% /> 
 </p>
+<code>&nbsp;&nbsp;&nbsp;&nbsp;</code><code>&nbsp;&nbsp;&nbsp;&nbsp;</code>(Left: CNN training loss --- Right: Prediction results)
 
-(Left: CNN training loss --- Right: Prediction results)
-
-Test - Average:   loss = 0.050, ExpVar = -0.372, R2 = -0.966, MAE = 0.186
+Test CNN - Average:   loss = 0.050, ExpVar = -0.372, R2 = -0.966, MAE = 0.186
 
 ### 5. Next step
 * Using One-hot encoding
