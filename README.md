@@ -76,9 +76,9 @@ Test CNN - Average:   loss = 0.050, ExpVar = -0.372, R2 = -0.966, MAE = 0.186
 
 ### 6. Questions
 (1) The features dimension of X is too large (10000 features) + the matrix X only contains 0 and 2. 
-* -> technique for reducing the numbers of features and extracting only the valuale features
+* -> technique for reducing the number of features and extracting only the valuable features
 
-(2) y label used Min Max Scaler -> when training model, loss MSE is very low, however the explained variance doesn't make sense. 
+(2) y label used Min Max Scaler -> when training model, loss MSE is very low; however, the explained variance doesn't make sense. 
 * -> technique for scailing y lael
 
 (3) CNN model is mainly used for classification task.
