@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from models.RNN import *
 from models.MLP import *
 from models.CNN import *
+from tuning.trial_tuning_CNN import *
+from tuning.trial_tuning_MLP import *
 from preprocess.encode_data import *
 
 if __name__ == '__main__':
@@ -16,7 +18,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-dd", "--data_dir", type=str,
-                        default='/Users/nghihuynh/Documents/MscTUM_BioTech/4th_semester/Internship/intern_pheno_nnets/src/data',
+                        default='/Users/nghihuynh/Documents/MscTUM_BioTech/4th_semester/Internship/intern_pheno_nnets/src',
                         help="Path to the data folder")
     
     parser.add_argument("-enc", "--encode", type=str,
@@ -45,7 +47,6 @@ if __name__ == '__main__':
 
     # split_train_test
     X_train, y_train, X_test, y_test = split_train_test(X,y)
-
     # ----------------------------------------------------
     # Encode data
     # ----------------------------------------------------
@@ -67,9 +68,13 @@ if __name__ == '__main__':
     # ----------------------------------------------------
     # Train model
     # ----------------------------------------------------
-    # model = run_train_RNN(X, y)
 
-    model = run_train_CNN(X_train, y_train)
+    # model = run_train_CNN(datapath, X_train, y_train, X_test, y_test)
 
-    # model = run_train_MLP(X, y)
+    # model = run_train_MLP(datapath, X_train, y_train, X_test, y_test)
+
+    # model = trial_train_and_tune_CNN(X_train, y_train)
     
+    model = trial_train_and_tune_MLP(datapath, X_train, y_train)
+
+

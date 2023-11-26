@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import torch
 from torch.nn.functional import one_hot
 
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split
+
 # Read the prepared (raw) data by pandas
 def read_data(datapath):
     """
@@ -12,8 +16,8 @@ def read_data(datapath):
         + out: the returned format is pandas dataframe and write to .csv files
     """
 
-    df_genotypes  = pd.read_csv(datapath + '/add012encoded_geneotype_dataset.csv')
-    df_phenotypes = pd.read_csv(datapath + '/phenotype_data.csv')
+    df_genotypes  = pd.read_csv(datapath + '/data/add012encoded_geneotype_dataset.csv')
+    df_phenotypes = pd.read_csv(datapath + '/data/phenotype_data.csv')
 
     # Some basis summary about the dataset
     # print('------------------------------------------------------------------')
@@ -56,8 +60,8 @@ def read_data(datapath):
     # convert new dataset to csv
     # print('------------------------------------------------------------------')
     # print('Convert original X y to new X y to csv files: ')
-    X1.to_csv(datapath + '/x1_matrix.csv')
-    y1.to_csv(datapath + '/y1_matrix.csv')
+    X1.to_csv(datapath + '/data/x1_matrix.csv')
+    y1.to_csv(datapath + '/data/y1_matrix.csv')
     # print('------------------------------------------------------------------\n')
 
 
@@ -67,8 +71,8 @@ def read_prerocessed_data(datapath):
         + in: path to X and y
         + out: the X and y as type numpy array
     """
-    X = pd.read_csv(datapath + '/x1_matrix.csv')
-    y = pd.read_csv(datapath + '/y1_matrix.csv')
+    X = pd.read_csv(datapath + '/data/x1_matrix.csv')
+    y = pd.read_csv(datapath + '/data/y1_matrix.csv')
 
     X_nparray = X.iloc[:,2:].to_numpy()
     y_nparray = y.iloc[:,2].to_numpy()
@@ -76,16 +80,61 @@ def read_prerocessed_data(datapath):
 
     return X_nparray, y_nparray
 
+
+# -------------------------------------------------------------
+#  Prepare dataset
+# -------------------------------------------------------------
+
+# Standardize data
+def standardize_data(X):
+    standard_scaler = StandardScaler()
+    standard_scaler.fit(X)
+    X_scaled = standard_scaler.transform(X)
+    return X_scaled
+
+# Min Max Scaler
+def minmax_scaler(y):
+    minmax_scaler = MinMaxScaler()
+    y = np.expand_dims(y, axis=1)
+    y_scaled = minmax_scaler.fit_transform(y)
+    return  y_scaled
+
+# transform dataset to Tensor
+def to_tensor(X, y):
+    tensor_X = torch.Tensor(X)
+    tensor_y = torch.Tensor(y)
+    return tensor_X, tensor_y
+
+# PCA
+def decompose_PCA(X):
+    pca = PCA(0.90)
+    pca.fit(X)
+    # print(pca.explained_variance_ratio_)
+    # print(pca.components_)
+    X = pca.transform(X)
+
+    return X
+
+
 def split_train_test(X_nparray, y_nparray):
-    # Train dataset
-    X_train = X_nparray[0:X_nparray.shape[0]-50, :]
-    y_train = y_nparray[0:X_nparray.shape[0]-50]
-    # print(X_train.shape, y_train.shape) #(450,10000) (450,)
+
+    # Preprocessing dataset
+    X_scaled = standardize_data(X_nparray)
+    y_scaled = minmax_scaler(y_nparray)
+    # X_scaled = decompose_PCA(X_scaled)
+    # print('X_scaled PCA:', X_scaled.shape)
+
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, train_size=0.9, shuffle=True)
+
+    # # Train dataset
+    # X_train = X_nparray[0:X_nparray.shape[0]-50, :]
+    # y_train = y_nparray[0:X_nparray.shape[0]-50]
+    # # print(X_train.shape, y_train.shape) #(450,10000) (450,)
     
-    # Test dataset: 50 last values
-    X_test = X_nparray[-50:X_nparray.shape[0], :]
-    y_test = y_nparray[-50:X_nparray.shape[0]]
-    #print(X_test.shape, y_test.shape) #(50, 10000) (50,)
+    # # Test dataset: 50 last values
+    # X_test = X_nparray[-50:X_nparray.shape[0], :]
+    # y_test = y_nparray[-50:X_nparray.shape[0]]
+    # #print(X_test.shape, y_test.shape) #(50, 10000) (50,)
 
     return X_train, y_train, X_test, y_test
 

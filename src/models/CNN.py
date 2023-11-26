@@ -53,7 +53,7 @@ class CNN1D(Module):
         )
 
         self.linear = Sequential(
-            Linear(9600, 512),
+            Linear(10560, 512),
             LeakyReLU(inplace=True),
             BatchNorm1d(512),
             Dropout(0.5),
@@ -273,20 +273,17 @@ def decompose_PCA(X):
 # -------------------------------------------------------------
 # ============== Call and train model  ========================
 # -------------------------------------------------------------
-def run_train_CNN(X_train, y_train, X_test):
+def run_train_CNN(datapath, X_train, y_train, X_test, y_test):
 
     # define relevant hyperparameter for the ML task
     n_outputs  = 1
     batch_size = 50
-    num_epochs = 2
+    num_epochs = 5
     k_folds = 5
     learning_rate = 0.0005
-    
+
     # Get dataset
-    X_scaled = standardize_data(X_train)
-    y_scaled = minmax_scaler(y_train)
-    X_scaled = decompose_PCA(X_scaled)
-    tensor_X, tensor_y = to_tensor(X_scaled, y_scaled)
+    tensor_X, tensor_y = to_tensor(X_train, y_train)
 
     # unsqueeze 2D array to convert it into 3D array
     tensor_X = tensor_X.unsqueeze(1) #torch.size(450, 1, 10000)
@@ -301,19 +298,50 @@ def run_train_CNN(X_train, y_train, X_test):
     # specify the zeroth index for the return of model
     model = trained_model[0]
 
+    # save the trained model
+    # torch.save(model, datapath + '/utils/save_CNN.model')
+
+     # load the trained model
+    # print("Loading the trained CNN model ...\n")
+    # model = torch.load('datapath + '/utils/save_CNN.model')
+
     # Get train loss and val loss for plotting
-    train_loss = trained_model[1]
-    val_loss = trained_model[2]
+    # train_loss = trained_model[1]
+    # val_loss = trained_model[2]
     # print('Values of training loss: ', train_loss)
     # print('Values of validating loss: ', val_loss)
 
+    # -------------------------------------------------------------
     # Evaluate model by test dataset
-    # X_test_standard = standard_scaler.fit_transform(X_test)
-    # tensor_X_test = torch.Tensor(X_test_standard)
-    # tensor_X_test = tensor_X_test.unsqueeze(1)
-    # model.eval()
-    # with torch.no_grad():
-    #     test_output = model(tensor_X_test)
-    # print('Test_output: ', test_output)
+    tensor_X_test = torch.Tensor(X_test)
+    tensor_X_test = tensor_X_test.unsqueeze(1)
 
-    return model
+    model.eval()
+    with torch.no_grad():
+        y_preds = model(tensor_X_test)
+
+        # change to numpy for calculating metrics in scikit learn library
+        y_preds = y_preds.detach().squeeze().numpy()
+        y_test  = y_test.squeeze()
+
+        # collect mse, r2, explained variance
+        test_mse = mean_squared_error(y_test, y_preds)
+        test_exp_variance = explained_variance_score(y_test, y_preds)
+        test_r2 = r2_score(y_test, y_preds)
+        test_mae = mean_absolute_error(y_test, y_preds)
+
+        print('\t \t Test - Average:   loss = {:.3f}, ExpVar = {:.3f}, R2 = {:.3f}, MAE = {:.3f}'.format(test_mse, test_exp_variance, test_r2, test_mae))
+
+    
+    # Plot the model
+    x_plot = np.arange(len(y_preds))
+    plt.scatter(x_plot, y_test, alpha=0.5, label='ground_true')
+    plt.plot(x_plot, y_preds, label='prediction', color='r')
+
+    plt.xlabel('Samples', fontsize=13)
+    plt.ylabel('Pheno1 (g)', fontsize=13)
+    plt.grid()
+    plt.legend()
+    plt.savefig(datapath + '/utils/CNN_preds_groundtrue.svg', bbox_inches='tight')
+    plt.show()
+ 

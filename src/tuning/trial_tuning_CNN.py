@@ -33,7 +33,7 @@ import math
 # ==============================================================
 # Build CNN Model
 # ==============================================================
-def CNN1D(optuna_trial, in_channels, out_channels, n_layers, kernel_size, act_func, dropout, n_features, units_linear_output, n_outputs):
+def CNN1D(kernel_size):
     """
     Generate sequential network model with optuna optimization.
 
@@ -49,25 +49,30 @@ def CNN1D(optuna_trial, in_channels, out_channels, n_layers, kernel_size, act_fu
     # in_features = Sequential(*layers)(torch.zeros(size=(1, 1, n_features))).shape[1]
     # out_features = int(in_features * units_linear_output)
 
-    for i in range(n_layers): 
-        #out_features = optuna_trial.suggest_int("n_units_l{}".format(i), 2, in_features)
-        layers.append(Conv1d(in_channels=in_channels, out_channels=out_channels,
-                                         kernel_size=kernel_size))
-        layers.append(act_func)
-        layers.append(BatchNorm1d(out_channels))
-        layers.append(Dropout(dropout))
-        in_channels = out_channels
+    
+    #out_features = optuna_trial.suggest_int("n_units_l{}".format(i), 2, in_features)
+    layers.append(Conv1d(1, 4, kernel_size=kernel_size))
+    # layers.append(ReLU())
+    # layers.append(BatchNorm1d(4))
+    #layers.append(Dropout(dropout))
 
-    layers.append(MaxPool1d(kernel_size=kernel_size)) 
-    layers.append(Flatten())
-    in_features = Sequential(*layers)(torch.zeros(size=(1, 1, n_features))).shape[1]
-    out_features = int(in_features * units_linear_output)
+    # layers.append(Conv1d(4, 16, kernel_size=kernel_size))
+    # layers.append(ReLU())
+    # layers.append(BatchNorm1d(16))
+    # layers.append(Dropout(dropout))
+ 
 
-    layers.append(Linear(in_features=in_features, out_features=out_features))
-    layers.append(act_func)
-    layers.append(BatchNorm1d(num_features=out_features))
-    layers.append(Dropout(dropout))
-    layers.append(Linear(in_features=out_features, out_features=n_outputs))
+    # layers.append(MaxPool1d(2))
+    # layers.append(Flatten())
+
+    # in_features = Sequential(*layers)(torch.zeros(size=(1, 1, n_features))).shape[1]
+    # out_features = int(in_features * units_linear_output)
+
+    # layers.append(Linear(79968, 512))
+    # layers.append(ReLU())
+    # layers.append(BatchNorm1d(512))
+    # layers.append(Dropout(0.5))
+    # layers.append(Linear(512, 1))
 
     return torch.nn.Sequential(*layers)
 
@@ -82,19 +87,11 @@ def train_model(num_epochs, X, y, params, optuna_trial):
 
     # init params before training
     num_features = np.size(X, 1)
-    batch_size = 100
+    print('num features', num_features)
+    batch_size = 50
 
     # initialize the MLP model
-    cnn_model = CNN1D(optuna_trial,
-            in_channels = 1,
-            out_channels = params['initial_out_channels'],
-            n_layers  = params['n_layers'],
-            kernel_size = params['kernel_size'],
-            act_func = params['act_func'],
-            dropout   = params['dropout'],
-            n_features = num_features,
-            units_linear_output = params['units_linear_output'],
-            n_outputs = 1)
+    cnn_model = CNN1D(kernel_size= params['kernel_size'])
     
     # repare and split datasets
     X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.7, shuffle=True)
@@ -109,6 +106,7 @@ def train_model(num_epochs, X, y, params, optuna_trial):
     tensor_X_train = torch.from_numpy(X_train)
     tensor_X_test  = torch.from_numpy(X_test)
     tensor_X_train = tensor_X_train.unsqueeze(1)
+    print('tensor X shape', tensor_X_train.shape)
     tensor_X_test = tensor_X_test.unsqueeze(1)
 
     tensor_y_train = torch.from_numpy(y_train).view(len(y_train),1)
@@ -132,14 +130,16 @@ def train_model(num_epochs, X, y, params, optuna_trial):
             inputs, targets = inputs.float(), targets.float()
 
             # make sure the targets reshaped
-            targets = targets.reshape((targets.shape[0], 1))
-            
+            # targets = targets.reshape((targets.shape[0], 1))
+
             # zero the gradients
             optimizer.zero_grad()
-
+            
             # perform model forwarding
+            print('input shape', inputs.shape)
             outputs = cnn_model(inputs)
-
+            print('output shape', outputs.shape)
+            exit(1)
             # compute the loss
             loss = loss_function(outputs, targets)
 
@@ -148,7 +148,7 @@ def train_model(num_epochs, X, y, params, optuna_trial):
     
             # perform optimization
             optimizer.step()  
-
+            
         # print epoch and loss
         # print ('Epoch {}/{}, loss: {:.4f}'.format(epoch+1, num_epochs, loss.item()))
         # print('----------------------------------------------------\n')
@@ -159,10 +159,10 @@ def train_model(num_epochs, X, y, params, optuna_trial):
             for i, (inputs, targets) in enumerate(test_loader):
 
                 # cast the inputs and targets into float
-                inputs, targets = inputs.float(), targets.float()
+                # inputs, targets = inputs.float(), targets.float()
 
                 # make sure the targets reshaped
-                targets = targets.reshape((targets.shape[0], 1))
+                # targets = targets.reshape((targets.shape[0], 1))
                 
                 # perform forward pass
                 test_outputs = cnn_model(inputs)
@@ -192,12 +192,7 @@ def objective(X, y, optuna_trial):
               'learning_rate': optuna_trial.suggest_float('learning_rate', 1e-6, 1e-2), 
               'optimizer': optuna_trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD"]),
               'weight_decay': optuna_trial.suggest_float('weight_decay', 1e-4, 1e-2),
-              'initial_out_channels': optuna_trial.suggest_int('initial_out_channels', 4, 8),
-              "n_layers" : optuna_trial.suggest_int("n_layers", 1, 5),
               'kernel_size': optuna_trial.suggest_int('kernel_size', 2, 8),
-              'act_func': optuna_trial.suggest_categorical('act_func', ['ReLU', 'LeakyReLU']),
-              "dropout" : optuna_trial.suggest_float('dropout', 0.1, 0.5),
-              'units_linear_output': optuna_trial.suggest_float('optuna_trial.suggest_float', 0.2, 0.5)
               }
     
     # num epochs for training
@@ -217,7 +212,7 @@ def objective(X, y, optuna_trial):
 # ==============================================================
 # Call and train model
 # ==============================================================
-def train_and_tune_CNN(X, y):
+def trial_train_and_tune_CNN(X, y):
 
     # init optuna tuning object
     num_trials = 10
@@ -226,7 +221,7 @@ def train_and_tune_CNN(X, y):
 
     model_params = search_space.best_trial.params
     model_params['optuna_best_trial_number'] =  search_space.best_trial.number 
-    model_params['optuna_best_trial_value'] = float(np.round(search_space.best_value, 6))
+    model_params['optuna_best_trial_value'] = float(np.round(search_space.best_value, 1))
     model_params["n_trials"] = num_trials
 
     with open(f"/Users/nghihuynh/Documents/MscTUM_BioTech/4th_semester/Internship/intern_pheno_nnets/tuning/tuning_cnn_" + str(num_trials) + ".json", 'w') as fp:
