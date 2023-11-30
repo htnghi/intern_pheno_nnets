@@ -65,7 +65,7 @@ def read_data(datapath):
     # print('------------------------------------------------------------------\n')
 
 
-def read_prerocessed_data(datapath):
+def read_split_train_test_data(datapath):
     """
     Read the preprocessed data after matching input features and labels,
         + in: path to X and y
@@ -74,12 +74,15 @@ def read_prerocessed_data(datapath):
     X = pd.read_csv(datapath + '/data/x1_matrix.csv')
     y = pd.read_csv(datapath + '/data/y1_matrix.csv')
 
-    X_nparray = X.iloc[:,2:].to_numpy()
-    y_nparray = y.iloc[:,2].to_numpy()
+    X_nparray = X.iloc[:,2:]
+    y_nparray = y.iloc[:,2]
     # print(X_nparray. shape, y_nparray.shape) #(500, 10000) (500,)
 
-    return X_nparray, y_nparray
-
+    X_train, X_test, y_train, y_test = train_test_split(X_nparray, y_nparray, train_size=0.9, shuffle=True)
+    X_train.to_csv(datapath + '/data/x1_train_matrix.csv')
+    y_train.to_csv(datapath + '/data/y1_train_matrix.csv')
+    X_test.to_csv(datapath + '/data/x1_test_matrix.csv')
+    y_test.to_csv(datapath + '/data/y1_test_matrix.csv')
 
 # -------------------------------------------------------------
 #  Prepare dataset
@@ -116,27 +119,25 @@ def decompose_PCA(X):
     return X
 
 
-def split_train_test(X_nparray, y_nparray):
+def get_split_train_test(datapath):
+
+    X_train = pd.read_csv(datapath + '/data/x1_train_matrix.csv')
+    y_train = pd.read_csv(datapath + '/data/y1_train_matrix.csv')
+    X_test = pd.read_csv(datapath + '/data/x1_test_matrix.csv')
+    y_test = pd.read_csv(datapath + '/data/y1_test_matrix.csv')
+
+    X_train_nparray, y_train_nparray = X_train.iloc[:,1:].to_numpy(), y_train.iloc[:,1].to_numpy()
+    X_test_nparray, y_test_nparray = X_test.iloc[:,1:].to_numpy(), y_test.iloc[:,1].to_numpy()
 
     # Preprocessing dataset
-    X_scaled = standardize_data(X_nparray)
+    X_train_nparray = standardize_data(X_train_nparray)
+    X_test_nparray = standardize_data(X_test_nparray)
+
     # X_scaled = X_nparray
-    y_scaled =y_nparray
     # y_scaled = minmax_scaler(y_nparray)
     # X_scaled = decompose_PCA(X_scaled)
     # print('X_scaled PCA:', X_scaled.shape)
 
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, train_size=0.9, shuffle=True)
 
-    # # Train dataset
-    # X_train = X_nparray[0:X_nparray.shape[0]-50, :]
-    # y_train = y_nparray[0:X_nparray.shape[0]-50]
-    # # print(X_train.shape, y_train.shape) #(450,10000) (450,)
-    
-    # # Test dataset: 50 last values
-    # X_test = X_nparray[-50:X_nparray.shape[0], :]
-    # y_test = y_nparray[-50:X_nparray.shape[0]]
-    # #print(X_test.shape, y_test.shape) #(50, 10000) (50,)
-
-    return X_train, y_train, X_test, y_test
+    return X_train_nparray, y_train_nparray, X_test_nparray, y_test_nparray
 

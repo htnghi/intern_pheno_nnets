@@ -39,14 +39,14 @@ if __name__ == '__main__':
     # print('-----------------------------------------------\n')
 
     # read_data(datapath)
-    X, y = read_prerocessed_data(datapath)
+    # read_split_train_test_data(datapath)
     # print("Data after preprocessing: ")
     # print(X)
     # print(y)
     # print('-----------------------------------------------\n')
 
     # split_train_test
-    X_train, y_train, X_test, y_test = split_train_test(X,y)
+    X_train, y_train, X_test, y_test = get_split_train_test(datapath)
     # ----------------------------------------------------
     # Encode data
     # ----------------------------------------------------
