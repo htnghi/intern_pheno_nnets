@@ -120,7 +120,9 @@ def split_train_test(X_nparray, y_nparray):
 
     # Preprocessing dataset
     X_scaled = standardize_data(X_nparray)
-    y_scaled = minmax_scaler(y_nparray)
+    # X_scaled = X_nparray
+    y_scaled =y_nparray
+    # y_scaled = minmax_scaler(y_nparray)
     # X_scaled = decompose_PCA(X_scaled)
     # print('X_scaled PCA:', X_scaled.shape)
 

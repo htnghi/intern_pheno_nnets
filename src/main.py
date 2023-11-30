@@ -71,10 +71,10 @@ if __name__ == '__main__':
 
     # model = run_train_CNN(datapath, X_train, y_train, X_test, y_test)
 
-    # model = run_train_MLP(datapath, X_train, y_train, X_test, y_test)
+    model = run_train_MLP(datapath, X_train, y_train, X_test, y_test)
 
     # model = trial_train_and_tune_CNN(X_train, y_train)
     
-    model = trial_train_and_tune_MLP(datapath, X_train, y_train)
+    # model = trial_train_and_tune_MLP(datapath, X_train, y_train)
 
 
