@@ -4,12 +4,9 @@ from pandas import read_csv
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, average_precision_score
-from sklearn.metrics import confusion_matrix, recall_score, f1_score
+from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from sklearn.metrics import explained_variance_score, r2_score, mean_squared_error, mean_absolute_error
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
 from sklearn.decomposition import PCA
 
 from torch.utils.data import Dataset, TensorDataset
@@ -18,6 +15,7 @@ from torch.utils.data import random_split
 
 import pickle as pk
 import torch
+
 from torch import Tensor
 from torch.nn import Linear
 from torch.nn import ReLU, LeakyReLU, Dropout, BatchNorm1d
@@ -40,21 +38,17 @@ class MLP(Module):
     def __init__(self, n_inputs):
         super(MLP, self).__init__()
         # 1st hidden layer
-        self.hidden1 = Linear(n_inputs, 226)     # a linear transformation (fully connected layer) with n_inputs input features and 20 output features
+        self.hidden1 = Linear(n_inputs, 106)     # a linear transformation (fully connected layer) with n_inputs input features and 20 output features
         self.act1 = LeakyReLU()
         # 2nd hidden layer
-        self.hidden2 = Linear(226, 193)
+        self.hidden2 = Linear(106, 207)
         self.act2 = LeakyReLU()
         # 3rd hidden layer
-        self.hidden3 = Linear(193, 118)
+        self.hidden3 = Linear(207, 74)
         self.act3 = LeakyReLU()
-        # 4th
-        self.hidden4 = Linear(118, 211)
-        self.act4 = LeakyReLU()
-        # 5th
-        self.drop = Dropout(0.4)
-        self.hidden5 = Linear(211, 1)
- 
+        # 4th hidden layer
+        self.drop = Dropout(0.2)
+        self.hidden4 = Linear(74, 1)
 
     # Forward pass
     def forward(self, X):
@@ -67,24 +61,46 @@ class MLP(Module):
         # 3rd hidden layer
         X = self.hidden3(X)
         X = self.act3(X)
-        # 4th
-        X = self.hidden4(X)
-        X = self.act4(X)
-        # 5th
+        # 4th hidden layer
         X = self.drop(X)
-        X = self.hidden5(X)
+        X = self.hidden4(X)
 
         return X
     
 # ==============================================================
 # 2. The trainning loop and function validation
 # ==============================================================
-def validation(model, val_loader, criterion, val_loss, best_loss, best_weights, val_loss_total, val_exp_variance_sum, val_r2_sum, val_mae_sum):
+def train_each_epoch(train_loader, model, criterion, optimizer, train_loss, train_loss_total):
+
+    # training loop with train_loader --------------------------------------------
+    for i, (inputs, targets) in enumerate(train_loader):
+        # call model train
+        model.train()
+        # get predicted outputs
+        pred_outputs = model(inputs)
+        # calculate loss
+        loss_training = criterion(pred_outputs, targets)
+        # optimizer sets to 0 gradients
+        optimizer.zero_grad()
+        # set the loss to back propagate through the network updating the weights
+        loss_training.backward()
+        # perform optimizer step
+        optimizer.step()  
+
+        # Sum up mse loss and r2, expVar, mae 
+        train_loss += loss_training.item()
     
-    # define initial values to calculate metrics - val dataset
-    val_exp_variance = 0.0
-    val_r2 = 0.0
-    val_mae = 0.0
+    # Mean validating loss and other metrics for each epoch
+    train_loss_avg = train_loss/len(train_loader)
+    print('\t \t Training - Average: loss = {:.3f}'.format(train_loss_avg))
+
+    # storing total loss and metris
+    train_loss_total.append(train_loss_avg)
+
+    return model, train_loss_total
+
+
+def validation_each_epoch(model, val_loader, criterion, val_loss, val_loss_total):
 
     model.eval()
     with torch.no_grad():
@@ -92,50 +108,17 @@ def validation(model, val_loader, criterion, val_loss, best_loss, best_weights, 
             yhat = model(inputs)
             loss_validation = criterion(yhat, targets)
             
-            # hold the best loss (also the best model)
-            if loss_validation < best_loss:
-                best_loss = loss_validation
-                best_weights = copy.deepcopy(model.state_dict())
-            
-            # change to numpy for calculating metrics in scikit learn library
-            yhat = yhat.detach().numpy() 
-            targets = targets.squeeze().numpy()
-            # yhat = yhat.flatten().tolist()
-            # targets = targets.flatten().tolist()
-            # print('r2 score:', r2_score(targets, yhat))
-
-            # collect mse, r2, explained variance from val_dataset
-            val_exp_variance = explained_variance_score(targets, yhat)
-            val_r2 = r2_score(targets, yhat)
-            val_mae = mean_absolute_error(targets, yhat)
-
-            # print metrics after each step in each epoch
-            # print ('\t \t  Validation - Step {}: loss = {:.3f}, ExpVar = {:.3f}, R2 = {:.3f}, MAE = {:.3f}'.format(i+1, loss_validation.item(), val_exp_variance, val_r2, val_mae))
-
-            # Sum up mse loss and r2, expVar, mae 
+            # Sum up loss
             val_loss += loss_validation.item()
-            val_exp_variance_sum += val_exp_variance
-            val_r2_sum += val_r2
-            val_mae_sum += val_mae
 
-    # Mean validating loss and other metrics for each epoch
-    avg_val_loss = val_loss/len(val_loader)
-    avg_val_exp_variance = val_exp_variance_sum/len(val_loader)
-    avg_val_r2 = val_r2_sum/len(val_loader)
-    avg_val_mae = val_mae_sum/len(val_loader)
-    print('\t \t Validation - Average: loss = {:.3f}, ExpVar = {:.3f}, R2 = {:.3f}, MAE = {:.3f}'.format(avg_val_loss, avg_val_exp_variance, avg_val_r2, avg_val_mae))
+    # Mean validating loss for each epoch
+    val_loss_avg = val_loss/len(val_loader)
+    print('\t \t Validation - Average: loss = {:.3f}'.format(val_loss_avg))
 
     # storing total loss and metris
-    val_loss_total.append(avg_val_loss)
+    val_loss_total.append(val_loss_avg)
 
-    # restore model and return best accuracy
-    model.load_state_dict(best_weights)
-    # print("\t\t\t Best loss_MSE: %.2f" % best_loss)
-    # plt.plot(range(len(train_loss)), train_loss, val_loss)
-    # plt.show()
-
-    return val_loss_total
-
+    return val_loss_avg, val_loss_total
 
 
 def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
@@ -150,16 +133,25 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
     # define for holding the best model
     best_loss = np.inf
     best_weights = None
+    best_epoch = 0
+    best_fold  = 0
     
     for fold, (train_ids, val_ids) in enumerate(kfold.split(X, y)):
-        print('FOLD {}: len(train)={}, len(val)={}'.format(fold, len(train_ids), len(val_ids)))
+        print('FOLD {}: len(train)={}, len(val)={}'.format(fold+1, len(train_ids), len(val_ids)))
 
         # extract X, y for training and validating
         X_train, y_train = X[train_ids], y[train_ids]
         X_val, y_val = X[val_ids], y[val_ids]
 
+        # MinMax Scaler
+        minmax_scaler = MinMaxScaler()
+        y_train = np.expand_dims(y_train, axis=1)
+        y_train_scaled = minmax_scaler.fit_transform(y_train)
+        y_val = np.expand_dims(y_val, axis=1)
+        y_val_scaled = minmax_scaler.fit_transform(y_val)
+
         # PCA
-        pca = PCA(0.8)
+        pca = PCA(n_components=218)
         pca.fit(X_train)
         X_train = pca.transform(X_train)
         X_val = pca.transform(X_val)
@@ -170,8 +162,8 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
         n_inputs = np.size(X_train, 1) # len of column
 
         # transform to tensor 
-        tensor_X_train, tensor_y_train = to_tensor(X_train, y_train)
-        tensor_X_val, tensor_y_val = to_tensor(X_val, y_val)
+        tensor_X_train, tensor_y_train = to_tensor(X_train, y_train_scaled)
+        tensor_X_val, tensor_y_val = to_tensor(X_val, y_val_scaled)
         
         # Define data loaders for training and testing data in this fold
         train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
@@ -186,77 +178,41 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
             # define loss function and optimizer
             criterion = MSELoss()   
             optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=momentum)
-
-            # define initial values to calculate metrics - test dataset
-            train_exp_variance = 0.0
-            train_r2 = 0.0
-            train_mae = 0.0
             
-            # delcare some arrays for storing the sum values of MSE, Exp-variance, R2, MAE
+            # delcare some arrays for storing the sum values of MSE
             train_loss = 0.0
-            train_exp_variance_sum = 0.0 
-            train_r2_sum = 0.0
-            train_mae_sum = 0.0
-
             val_loss = 0.0
-            val_exp_variance_sum = 0.0 
-            val_r2_sum = 0.0
-            val_mae_sum = 0.0
 
             # training loop with train_loader --------------------------------------------
-            for i, (inputs, targets) in enumerate(train_loader):
-                # call model train
-                model.train()
-                # get predicted outputs
-                pred_outputs = model(inputs)
-                # calculate loss
-                loss_training = criterion(pred_outputs, targets)
-                # optimizer sets to 0 gradients
-                optimizer.zero_grad()
-                # set the loss to back propagate through the network updating the weights
-                loss_training.backward()
-                # perform optimizer step
-                optimizer.step()  
-                
-                # change to numpy for calculating metrics in scikit learn library
-                pred_outputs = pred_outputs.detach().numpy() 
-                targets = targets.squeeze().numpy()
-
-                # collect mse, r2, explained variance from val_dataset
-                train_exp_variance = explained_variance_score(targets, pred_outputs)
-                train_r2 = r2_score(targets, pred_outputs)
-                train_mae = mean_absolute_error(targets, pred_outputs)
-
-                # print metrics after each step in each epoch
-                # print ('\t \t Train - Step {}: loss = {:.3f}, ExpVar = {:.3f}, R2 = {:.3f}, MAE = {:.3f}'.format(i+1, loss_training.item(), train_exp_variance, train_r2, train_mae))
-
-                # Sum up mse loss and r2, expVar, mae 
-                train_loss += loss_training.item()
-                train_exp_variance_sum += train_exp_variance
-                train_r2_sum += train_r2
-                train_mae_sum += train_mae
-            
-            # Mean validating loss and other metrics for each epoch
-            avg_train_loss = train_loss/len(train_loader)
-            avg_train_exp_variance = train_exp_variance_sum/len(train_loader)
-            avg_train_r2 = train_r2_sum/len(train_loader)
-            avg_train_mae = train_mae_sum/len(train_loader)
-            print('\t \t Training - Average:   loss = {:.3f}, ExpVar = {:.3f}, R2 = {:.3f}, MAE = {:.3f}'.format(avg_train_loss, avg_train_exp_variance, avg_train_r2, avg_train_mae))
-
-            # storing total loss and metris
-            train_loss_total.append(avg_train_loss)
+            model, train_loss_total = train_each_epoch(train_loader, model, criterion, optimizer, train_loss, train_loss_total)
 
             # Validate with val_loader -------------------------------------------------
-            validate_each_fold = validation(model, val_loader, criterion, val_loss, best_loss, best_weights, val_loss_total, val_exp_variance_sum, val_r2_sum, val_mae_sum)
+            val_loss_avg, val_loss_total = validation_each_epoch(model, val_loader, criterion, val_loss, val_loss_total)
         
-        print('-----------------------------------------------\n')       
+            # hold the best loss (also the best model)
+            if val_loss_avg < best_loss:
+                best_fold = fold+1
+                best_epoch = epoch+1
+                best_loss = val_loss_avg
+                best_weights = copy.deepcopy(model.state_dict())
+
+        # restore model
+        model.load_state_dict(best_weights)
+    print('Best loss_MSE={:.4f} at fold {} and epoch {}'.format(best_loss, best_fold, best_epoch))
+    print('-----------------------------------------------\n')       
 
     return model, train_loss_total, val_loss_total
-
 
 # -------------------------------------------------------------
 # 3. Prepare dataset
 # -------------------------------------------------------------
+# Min Max Scaler
+def minmax_scaler(y):
+    minmax_scaler = MinMaxScaler()
+    y = np.expand_dims(y, axis=1)
+    y_scaled = minmax_scaler.fit_transform(y)
+    return  y_scaled
+
 # transform dataset to Tensor
 def to_tensor(X, y):
     tensor_X = torch.Tensor(X)
@@ -271,10 +227,10 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test):
     # Define relevant hyperparameter for the ML task
     # n_inputs = np.size(X_train, 1) # len of column
     batch_size = 50
-    num_epochs = 5
+    num_epochs = 10
     k_folds = 5
-    learning_rate = 0.000419120031492209
-    momentum = 0.007508493751922909
+    learning_rate = 0.0051522889065098165
+    momentum = 0.009223144758744747
     
     # Get dataset
     # tensor_X, tensor_y = to_tensor(X_train, y_train)
@@ -307,6 +263,7 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test):
     pca_reloaded = pk.load(open('pca.pkl', 'rb'))
     X_test = pca_reloaded.transform(X_test)
     tensor_X_test = torch.Tensor(X_test)
+    y_test = minmax_scaler(y_test)
 
     model.eval()
     with torch.no_grad():
