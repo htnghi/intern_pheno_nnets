@@ -89,6 +89,19 @@ def train_model(num_epochs, X, y, k_folds, batch_size, params, optuna_trial):
         X_train, y_train = X[train_ids], y[train_ids]
         X_val, y_val = X[val_ids], y[val_ids]
 
+        # MinMax Scaler
+        minmax_scaler = MinMaxScaler()
+        y_train = np.expand_dims(y_train, axis=1)
+        y_train_scaled = minmax_scaler.fit_transform(y_train)
+        y_val = np.expand_dims(y_val, axis=1)
+        y_val_scaled = minmax_scaler.fit_transform(y_val)
+
+        # # Standardize scaler
+        # standard_scaler = StandardScaler()
+        # standard_scaler.fit(X_train)
+        # X_train_scaled = standard_scaler.transform(X_train)
+        # X_val_scaled = standard_scaler.transform(X_val)
+
         # PCA
         pca = PCA(params['pca'])
         pca.fit(X_train)
@@ -96,13 +109,13 @@ def train_model(num_epochs, X, y, k_folds, batch_size, params, optuna_trial):
         X_val = pca.transform(X_val)
         pk.dump(pca, open('./pca.pkl', 'wb'))
         # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
-
+        
         # Define relevant hyperparameter for the ML task
         num_features = np.size(X_train, 1) # len of column
 
         # transform to tensor 
-        tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train)
-        tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val)
+        tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train_scaled)
+        tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val_scaled)
         
         # Define data loaders for training and testing data in this fold
         train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
@@ -127,17 +140,12 @@ def train_model(num_epochs, X, y, k_folds, batch_size, params, optuna_trial):
             
             # iterate through training data loader
             for i, (inputs, targets) in enumerate(train_loader):
-                # call model train
+
                     model.train()
-                    # get predicted outputs
                     pred_outputs = model(inputs)
-                    # calculate loss
                     loss_training = criterion(pred_outputs, targets)
-                    # optimizer sets to 0 gradients
                     optimizer.zero_grad()
-                    # set the loss to back propagate through the network updating the weights
                     loss_training.backward()
-                    # perform optimizer step
                     optimizer.step() 
 
             # model evaluation
@@ -186,7 +194,7 @@ def objective(X, y, optuna_trial):
               }
     
     # num epochs for training
-    num_epochs = 2
+    num_epochs = 20
     batch_size = 50
     k_folds = 5
 
