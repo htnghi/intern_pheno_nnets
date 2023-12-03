@@ -121,12 +121,12 @@ def train_model(num_epochs, X, y, batch_size, params, optuna_trial):
     # X_val   = standard_scaler.transform(X_val)
 
     # PCA
-    # pca = PCA(params['pca'])
-    # pca.fit(X_train)
-    # X_train = pca.transform(X_train)
-    # X_val = pca.transform(X_val)
-    # pk.dump(pca, open('./pca.pkl', 'wb'))
-    # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
+    pca = PCA(params['pca'])
+    pca.fit(X_train)
+    X_train = pca.transform(X_train)
+    X_val = pca.transform(X_val)
+    pk.dump(pca, open('./pca.pkl', 'wb'))
+    print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
 
 
     # transform to tensor 
@@ -146,7 +146,7 @@ def train_model(num_epochs, X, y, batch_size, params, optuna_trial):
 
     # declare the MLP model
     cnn_model = CNN(optuna_trial,
-            num_features = 10000,
+            num_features = np.size(X_train, 1),
             kernel_size = params['kernel_size'],
             stride_percentage = params ['stride_percentage'],
             n_layers = params['n_layers'],
@@ -263,7 +263,8 @@ def objective(X, y, optuna_trial):
               'factor_out_linear_features': optuna_trial.suggest_float('factor_out_linear_features', 0.5, 1, step=0.1),
               'activation1': optuna_trial.suggest_categorical('activation1', ['ReLU', 'LeakyReLU', 'Tanh']),
               'activation2': optuna_trial.suggest_categorical('activation2', ['ReLU', 'LeakyReLU', 'Tanh']),
-              'dropout': optuna_trial.suggest_float('dropout', 0.1, 0.5)
+              'dropout': optuna_trial.suggest_float('dropout', 0.1, 0.5),
+              'pca': optuna_trial.suggest_float('pca', 0.7, 0.95, step=0.05)
               }
     
     # define external values to tune the hyperparameters
@@ -299,7 +300,7 @@ def objective(X, y, optuna_trial):
 def trial_train_and_tune_CNN(datapath, X, y):
 
     # number of trials
-    num_trials = 20
+    num_trials = 15
 
     search_space = optuna.create_study(direction ="minimize", sampler=optuna.samplers.TPESampler())
     # search_space = optuna.create_study(direction ="maximize", sampler=optuna.samplers.TPESampler())
