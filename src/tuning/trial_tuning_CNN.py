@@ -160,73 +160,82 @@ def train_model(num_epochs, X, y, batch_size, params, optuna_trial):
     loss_function = torch.nn.MSELoss()   
     optimizer = getattr(optim, params['optimizer'])(cnn_model.parameters(), lr= params['learning_rate'], weight_decay=params['weight_decay'])
 
-    for epoch in range(num_epochs):
-        
-        # iterate through training data loader
-        for i, (inputs, targets) in enumerate(train_loader):
+    try:
+        for epoch in range(num_epochs):
             
-            # cast the inputs and targets into float
-            inputs, targets = inputs.float(), targets.float()
-            targets = targets.reshape((targets.shape[0], 1))
-
-            cnn_model.train()
-            outputs = cnn_model(inputs)
-            loss = loss_function(outputs, targets)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-        
-        # model evaluation in each epoch
-        epoch_val_losses = []
-        epoch_val_expvars = []
-        epoch_val_r2scors = []
-
-        cnn_model.eval()
-        with torch.no_grad():
-            for i, (inputs, targets) in enumerate(val_loader):
-
+            # iterate through training data loader
+            for i, (inputs, targets) in enumerate(train_loader):
+                
                 # cast the inputs and targets into float
                 inputs, targets = inputs.float(), targets.float()
-
-                # make sure the targets reshaped and perform forward
                 targets = targets.reshape((targets.shape[0], 1))
 
-                val_outputs = cnn_model(inputs)
+                cnn_model.train()
+                outputs = cnn_model(inputs)
+                loss = loss_function(outputs, targets)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+            
+            # model evaluation in each epoch
+            epoch_val_losses = []
+            epoch_val_expvars = []
+            epoch_val_r2scors = []
 
-                # calculate the loss
-                val_loss = loss_function(val_outputs, targets)
-                epoch_val_losses.append(val_loss.item())
+            cnn_model.eval()
+            with torch.no_grad():
+                for i, (inputs, targets) in enumerate(val_loader):
 
-                # calculate the exp_var to check during optuna tuning
-                np_targets = targets.squeeze().numpy()
-                np_predics = val_outputs.detach().squeeze().numpy()
-                
-                test_expvar = explained_variance_score(np_targets, np_predics)
-                test_r2scor = r2_score(np_targets, np_predics)
-                epoch_val_expvars.append(test_expvar)
-                epoch_val_r2scors.append(test_r2scor)
+                    # cast the inputs and targets into float
+                    inputs, targets = inputs.float(), targets.float()
+
+                    # make sure the targets reshaped and perform forward
+                    targets = targets.reshape((targets.shape[0], 1))
+
+                    val_outputs = cnn_model(inputs)
+
+                    # calculate the loss
+                    val_loss = loss_function(val_outputs, targets)
+                    epoch_val_losses.append(val_loss.item())
+
+                    # calculate the exp_var to check during optuna tuning
+                    np_targets = targets.squeeze().numpy()
+                    np_predics = val_outputs.detach().squeeze().numpy()
+                    
+                    test_expvar = explained_variance_score(np_targets, np_predics, force_finite=False)
+                    test_r2scor = r2_score(np_targets, np_predics)
+                    epoch_val_expvars.append(test_expvar)
+                    epoch_val_r2scors.append(test_r2scor)
+            
+            epoch_avg_loss = np.average(epoch_val_losses)
+            arr_val_losses.append(epoch_avg_loss)
+
+            # check the explained variance and r2score of validation phase after each epoch
+            epoch_avg_expvar = np.average(epoch_val_expvars)
+            epoch_avg_r2scor = np.average(epoch_val_r2scors)
+            print("Validation phase, epoch {}: avg_expvar={:.3f}, avg_r2score={:.3f}, avg_mseloss={:.3f}".format(epoch, 
+                                                epoch_avg_expvar, epoch_avg_r2scor, epoch_avg_loss))
+
+            # try to tune with r2_score
+            arr_r2_scores.append(epoch_avg_r2scor)
+            arr_exp_vars.append(epoch_avg_expvar)
+                    
+        # time_delta = time.time() - start
+        # print('Training time in {:.0f}m {:.0f}s'.format(time_delta // 60, time_delta % 60))
+        print("--------------------------------------------------------------------")
+        print("")
         
-        epoch_avg_loss = np.average(epoch_val_losses)
-        arr_val_losses.append(epoch_avg_loss)
+        return arr_val_losses
+        # return arr_r2_scores
+        # return arr_exp_vars
 
-        # check the explained variance and r2score of validation phase after each epoch
-        epoch_avg_expvar = np.average(epoch_val_expvars)
-        epoch_avg_r2scor = np.average(epoch_val_r2scors)
-        print("Validation phase, epoch {}: avg_expvar={:.3f}, avg_r2score={:.3f}, avg_mseloss={:.3f}".format(epoch, 
-                                            epoch_avg_expvar, epoch_avg_r2scor, epoch_avg_loss))
-
-        # try to tune with r2_score
-        arr_r2_scores.append(epoch_avg_r2scor)
-        arr_exp_vars.append(epoch_avg_expvar)
-                
-    # time_delta = time.time() - start
-    # print('Training time in {:.0f}m {:.0f}s'.format(time_delta // 60, time_delta % 60))
-    print("--------------------------------------------------------------------")
-    print("")
-    
-    return arr_val_losses
-    # return arr_r2_scores
-    # return arr_exp_vars
+    except ValueError as e:
+        # Check if the error is related to NaN values
+        if "Input contains NaN" in str(e):
+            raise optuna.exceptions.TrialPruned()
+        else:
+            # If it's another type of ValueError, raise it again
+            raise
 
 # ==========================================================
 # Objective function for tuning hyper-parameters
