@@ -7,7 +7,6 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, average_precision_score
 from sklearn.metrics import confusion_matrix, recall_score, f1_score
 from sklearn.metrics import explained_variance_score, r2_score, mean_squared_error, mean_absolute_error
-from sklearn.metrics import explained_variance_score, r2_score, mean_squared_error, mean_absolute_error
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from sklearn.decomposition import PCA
@@ -19,7 +18,7 @@ from torch.utils.data import random_split
 import pickle as pk
 
 from torch.nn import MSELoss
-from torch.nn import Sequential, MaxPool1d, Flatten, LeakyReLU, BatchNorm1d, Dropout, Linear, ReLU, Sigmoid
+from torch.nn import Sequential, MaxPool1d, Flatten, LeakyReLU, BatchNorm1d, Dropout, Linear, ReLU, Tanh
 from torch.optim import SGD, Adam
 
 import torch
@@ -57,8 +56,10 @@ def MLP(optuna_trial, in_features, n_layers, dropout, activation, n_outputs):
         layers.append(Linear(in_features, out_features))
         if activation == 'relu':
             layers.append(ReLU())
+        elif activation == 'leakyrelu':
+            layers.append(LeakyReLU())
         else:
-            layers.append(LeakyReLU())     
+            layers.append(Tanh())     
         in_features = out_features
 
     layers.append(Dropout(dropout))
@@ -69,105 +70,123 @@ def MLP(optuna_trial, in_features, n_layers, dropout, activation, n_outputs):
 # ==============================================================
 # The trainning loop
 # ==============================================================
-def train_model(num_epochs, X, y, k_folds, batch_size, params, optuna_trial):
-    
-    # number of folds for cross-validation
-    kfold = KFold(n_splits=k_folds)
+def train_model(num_epochs, X, y, batch_size, params, optuna_trial):
 
     # declare arrays for storing total loss and other metrics
-    train_loss_total = []
-    val_loss_total = []
+    arr_val_losses = []
+    arr_r2_scores = []
+    arr_exp_vars = []
 
-    # for collecting the test loss
-    total_test_loss = []
+    # split X, y for training and validating
+    X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=0.7, shuffle=True)
 
+    # MinMax Scaler
+    minmax_scaler = MinMaxScaler()
+    y_train = np.expand_dims(y_train, axis=1)
+    y_train_scaled = minmax_scaler.fit_transform(y_train)
+    y_val = np.expand_dims(y_val, axis=1)
+    y_val_scaled = minmax_scaler.fit_transform(y_val)
 
-    for fold, (train_ids, val_ids) in enumerate(kfold.split(X, y)):
-        # print('FOLD {}: len(train)={}, len(val)={}'.format(fold, len(train_ids), len(val_ids)))
+    # Normalize dataset using StandardScaler
+    # standard_scaler = StandardScaler()
+    # standard_scaler.fit(X_train)
+    # X_train = standard_scaler.transform(X_train)
+    # X_val = standard_scaler.transform(X_val)
 
-        # extract X, y for training and validating
-        X_train, y_train = X[train_ids], y[train_ids]
-        X_val, y_val = X[val_ids], y[val_ids]
-
-        # MinMax Scaler
-        minmax_scaler = MinMaxScaler()
-        y_train = np.expand_dims(y_train, axis=1)
-        y_train_scaled = minmax_scaler.fit_transform(y_train)
-        y_val = np.expand_dims(y_val, axis=1)
-        y_val_scaled = minmax_scaler.fit_transform(y_val)
-
-        # # Standardize scaler
-        # standard_scaler = StandardScaler()
-        # standard_scaler.fit(X_train)
-        # X_train_scaled = standard_scaler.transform(X_train)
-        # X_val_scaled = standard_scaler.transform(X_val)
-
-        # PCA
-        pca = PCA(params['pca'])
-        pca.fit(X_train)
-        X_train = pca.transform(X_train)
-        X_val = pca.transform(X_val)
-        pk.dump(pca, open('./pca.pkl', 'wb'))
-        # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
+    # PCA
+    # pca = PCA(params['pca'])
+    # pca.fit(X_train)
+    # X_train = pca.transform(X_train)
+    # X_val = pca.transform(X_val)
+    # pk.dump(pca, open('./pca.pkl', 'wb'))
+    # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
         
-        # Define relevant hyperparameter for the ML task
-        num_features = np.size(X_train, 1) # len of column
+    # get the number of features
+    num_features = np.size(X_train, 1)
 
-        # transform to tensor 
-        tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train_scaled)
-        tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val_scaled)
+    # transform to tensor 
+    tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train)
+    tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val)
         
-        # Define data loaders for training and testing data in this fold
-        train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=batch_size, shuffle=True) 
+    # define data loaders for training and testing data in this fold
+    train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=(batch_size/2), shuffle=True) 
 
-         # Call model
-        model = MLP(optuna_trial,
-            in_features = num_features,
-            n_layers  = params['n_layers'],
-            dropout   = params['dropout'],
-            activation = params['activation'],
-            n_outputs = 1)
+    # creat the model object
+    model = MLP(optuna_trial,
+        in_features = num_features,
+        n_layers  = params['n_layers'],
+        dropout   = params['dropout'],
+        activation = params['activation'],
+        n_outputs = 1)
         
-         # define loss function and optimizer
-        criterion = MSELoss()   
-        optimizer = getattr(optim, params['optimizer'])(model.parameters(), lr= params['learning_rate'], weight_decay=params['weight_decay'])
+    # define loss function and optimizer
+    criterion = MSELoss()   
+    optimizer = getattr(optim, params['optimizer'])(model.parameters(), lr= params['learning_rate'], weight_decay=params['weight_decay'])
         
-        for epoch in range(num_epochs):
-            
-            # for collecting the test loss
-            total_test_loss = []
-            
-            # iterate through training data loader
-            for i, (inputs, targets) in enumerate(train_loader):
+    for epoch in range(num_epochs):
+        
+        # iterate through training data loader
+        for i, (inputs, targets) in enumerate(train_loader):
+            model.train()
+            pred_outputs = model(inputs)
+            loss_training = criterion(pred_outputs, targets)
+            optimizer.zero_grad()
+            loss_training.backward()
+            optimizer.step() 
 
-                    model.train()
-                    pred_outputs = model(inputs)
-                    loss_training = criterion(pred_outputs, targets)
-                    optimizer.zero_grad()
-                    loss_training.backward()
-                    optimizer.step() 
+        # model evaluation in each epoch
+        epoch_val_losses = []
+        epoch_val_expvars = []
+        epoch_val_r2scors = []
 
-            # model evaluation
-            model.eval()
-            with torch.no_grad():
-                for i, (inputs, targets) in enumerate(val_loader):
+        model.eval()
+        with torch.no_grad():
+            for i, (inputs, targets) in enumerate(val_loader):
 
-                    # cast the inputs and targets into float
-                    inputs, targets = inputs.float(), targets.float()
+                # cast the inputs and targets into float
+                inputs, targets = inputs.float(), targets.float()
 
-                    # make sure the targets reshaped
-                    targets = targets.reshape((targets.shape[0], 1))
-                    
-                    # perform forward pass
-                    test_outputs = model(inputs)
-                    test_loss = criterion(test_outputs, targets)
-                    total_test_loss.append(test_loss.item())
-                    
-        # time_delta = time.time() - start
-        # print('Training time in {:.0f}m {:.0f}s'.format(time_delta // 60, time_delta % 60))
+                # make sure the targets reshaped
+                targets = targets.reshape((targets.shape[0], 1))
+                
+                # perform forward pass
+                test_outputs = model(inputs)
+
+                # record the loss for each step to calculate the avg afterward
+                test_loss = criterion(test_outputs, targets)
+                epoch_val_losses.append(test_loss.item())
+
+                # calculate the exp_var to check during optuna tuning
+                np_targets = targets.squeeze().numpy()
+                np_predics = test_outputs.detach().squeeze().numpy()
+                
+                test_expvar = explained_variance_score(np_targets, np_predics)
+                test_r2scor = r2_score(np_targets, np_predics)
+                epoch_val_expvars.append(test_expvar)
+                epoch_val_r2scors.append(test_r2scor)
+        
+        epoch_avg_loss = np.average(epoch_val_losses)
+        arr_val_losses.append(epoch_avg_loss)
+
+        # check the explained variance and r2score of validation phase after each epoch
+        epoch_avg_expvar = np.average(epoch_val_expvars)
+        epoch_avg_r2scor = np.average(epoch_val_r2scors)
+        print("Validation phase, epoch {}: avg_expvar={:.3f}, avg_r2score={:.3f}, avg_mseloss={:.3f}".format(epoch, 
+                                            epoch_avg_expvar, epoch_avg_r2scor, epoch_avg_loss))
+        
+        # try to tune with r2_score
+        arr_r2_scores.append(epoch_avg_r2scor)
+        arr_exp_vars.append(epoch_avg_expvar)
+                
+    # time_delta = time.time() - start
+    # print('Training time in {:.0f}m {:.0f}s'.format(time_delta // 60, time_delta % 60))
+    print("--------------------------------------------------------------------")
+    print("")
     
-    return total_test_loss
+    # return arr_val_losses
+    # return arr_r2_scores
+    return arr_exp_vars
 
 # ==========================================================
 # Objective function for tuning hyper-parameters
@@ -180,34 +199,42 @@ def objective(X, y, optuna_trial):
     :param checkpoint_dir: checkpoint dir args
     :param cfg: config file
     :return: mean RMSE test loss
-    """ 
+    """
+    print("")
 
     # for tuning samples 
     params = {
               'learning_rate': optuna_trial.suggest_float('learning_rate', 1e-6, 1e-2), 
               'optimizer': optuna_trial.suggest_categorical("optimizer", ["Adam", "SGD"]),
               'weight_decay': optuna_trial.suggest_float('weight_decay', 1e-4, 1e-2),
-              'activation': optuna_trial.suggest_categorical('activation', ['leakyrelu', 'relu']),
+              'activation': optuna_trial.suggest_categorical('activation', ['leakyrelu', 'relu', 'tanh']),
               'n_layers' : optuna_trial.suggest_int("n_layers", 1, 5),
-              'dropout' : optuna_trial.suggest_float('dropout', 0.1, 0.5, step=0.1),
-              'pca': optuna_trial.suggest_float('pca', 0.7, 0.95, step=0.05)
+              'dropout' : optuna_trial.suggest_float('dropout', 0.1, 0.5, step=0.05)
+            #   'pca': optuna_trial.suggest_float('pca', 0.7, 0.95, step=0.05)
               }
     
     # num epochs for training
-    num_epochs = 20
+    num_epochs = 5
     batch_size = 50
-    k_folds = 5
 
     # call the train model
-    test_loss = train_model(num_epochs, X, y, k_folds, batch_size, params, optuna_trial) 
+    # val_loss = train_model(num_epochs, X, y, batch_size, params, optuna_trial) 
+    # r2_score = train_model(num_epochs, X, y, batch_size, params, optuna_trial)
+    exp_var = train_model(num_epochs, X, y, batch_size, params, optuna_trial)
 
     # return the mean MSE loss
-    mean_loss = np.mean(test_loss)
+    # mean_loss = np.mean(val_loss)
+    # mean_r2score = np.mean(r2_score)
+    mean_expvar = np.mean(exp_var)
 
     # sumarize loss values
-    print("Summary: max_loss={}, min_loss={}, avg_loss={} \n".format(np.max(test_loss), np.min(test_loss), mean_loss))
+    # print("Summary: max_loss={}, min_loss={}, avg_loss={} \n".format(np.max(val_loss), np.min(val_loss), mean_loss))
+    # print("Summary: max_r2score={}, min_r2score={}, avg_r2score={} \n".format(np.max(r2_score), np.min(r2_score), mean_r2score))
+    print("Summary: max_expvar={}, min_expvar={}, avg_expvar={} \n".format(np.max(exp_var), np.min(exp_var), mean_expvar))
 
-    return mean_loss
+    # return mean_loss
+    # return mean_r2score
+    return mean_expvar
 
 
 # ==============================================================
@@ -216,8 +243,9 @@ def objective(X, y, optuna_trial):
 def trial_train_and_tune_MLP(datapath, X, y):
 
     # init optuna tuning object
-    num_trials = 10
-    search_space = optuna.create_study(direction ="minimize", sampler=optuna.samplers.TPESampler())
+    num_trials = 20
+    # search_space = optuna.create_study(direction ="minimize", sampler=optuna.samplers.TPESampler())
+    search_space = optuna.create_study(direction ="maximize", sampler=optuna.samplers.TPESampler())
     search_space.optimize(lambda trial: objective(X, y, trial), n_trials=num_trials)
 
     model_params = search_space.best_trial.params
