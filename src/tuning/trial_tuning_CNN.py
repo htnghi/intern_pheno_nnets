@@ -34,7 +34,7 @@ def parse_activation_func(name):
         act_func = Tanh()
     return act_func
 
-def CNN(optuna_trial, num_features, kernel_size, stride_percentage, n_layers, factor_out_linear_features, dropout, activation1, activation2):
+def CNN(optuna_trial, num_features, kernel_size, n_layers, factor_out_linear_features, dropout, activation1, activation2):
     """
     Generate sequential network model with optuna optimization.
 
@@ -61,9 +61,9 @@ def CNN(optuna_trial, num_features, kernel_size, stride_percentage, n_layers, fa
     for i in range(n_layers):
 
         # print('DBG: conv layer {:2d}, in={:4d}, out={:4d}'.format(i, in_filters, out_filters))
-        stride = max(1, int(kernel_size*stride_percentage))
+        # stride = max(1, int(kernel_size*stride_percentage))
 
-        layers.append(Conv1d(in_filters, out_filters, kernel_size=kernel_size, stride=stride, padding=1))
+        layers.append(Conv1d(in_filters, out_filters, kernel_size=kernel_size, stride=1))
         layers.append(act_func1)
         layers.append(BatchNorm1d(out_filters))
         layers.append(Dropout(dropout))
@@ -148,7 +148,7 @@ def train_model(num_epochs, X, y, batch_size, params, optuna_trial):
     cnn_model = CNN(optuna_trial,
             num_features = 10000,
             kernel_size = params['kernel_size'],
-            stride_percentage = params ['stride_percentage'],
+            # stride_percentage = params ['stride_percentage'],
             n_layers = params['n_layers'],
             factor_out_linear_features= params['factor_out_linear_features'],
             dropout = params['dropout'],
@@ -249,9 +249,9 @@ def objective(X, y, optuna_trial):
               'optimizer': optuna_trial.suggest_categorical('optimizer', ["Adam", "RMSprop", "SGD"]),
               'weight_decay': optuna_trial.suggest_float('weight_decay', 1e-4, 1e-2),
               'kernel_size': optuna_trial.suggest_int("kernel_size", 2, 8),
-              'stride_percentage': optuna_trial.suggest_float('stride_percentage', 0.5, 1.0, step=0.1),
+            #   'stride_percentage': optuna_trial.suggest_float('stride_percentage', 0.5, 1.0, step=0.1),
               'n_layers': optuna_trial.suggest_int("n_layers", 1, 4),
-              'factor_out_linear_features': optuna_trial.suggest_float('factor_out_linear_features', 0.2, 0.5, step=0.05),
+              'factor_out_linear_features': optuna_trial.suggest_float('factor_out_linear_features', 0.2, 1, step=0.1),
               'activation1': optuna_trial.suggest_categorical('activation1', ['ReLU', 'LeakyReLU', 'Tanh']),
               'activation2': optuna_trial.suggest_categorical('activation2', ['ReLU', 'LeakyReLU', 'Tanh']),
               'dropout': optuna_trial.suggest_float('dropout', 0.1, 0.5)
