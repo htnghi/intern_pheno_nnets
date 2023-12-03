@@ -38,35 +38,39 @@ class MLP(Module):
     def __init__(self, n_inputs):
         super(MLP, self).__init__()
         # 1st hidden layer
-        self.hidden1 = Linear(n_inputs, 106)     # a linear transformation (fully connected layer) with n_inputs input features and 20 output features
+        self.hidden1 = Linear(n_inputs, 27200)     # a linear transformation (fully connected layer) with n_inputs input features and 20 output features
         self.act1 = LeakyReLU()
         # 2nd hidden layer
-        self.hidden2 = Linear(106, 207)
+        self.hidden2 = Linear(27200, 18496)
         self.act2 = LeakyReLU()
         # 3rd hidden layer
-        self.hidden3 = Linear(207, 74)
+        self.hidden3 = Linear(18496, 12577)
         self.act3 = LeakyReLU()
+        # 3rd hidden layer
+        self.hidden4 = Linear(12577, 8552)
+        self.act4 = LeakyReLU()
         # 4th hidden layer
-        self.drop = Dropout(0.2)
-        self.hidden4 = Linear(74, 1)
+        self.drop = Dropout(0.5)
+        self.hidden5 = Linear(8552, 1)
 
     # Forward pass
     def forward(self, X):
         # X = X.view(X.size(0), -1)
-
         #Input to 1st hidden layer
         X = self.hidden1(X)
         X = self.act1(X)
-        
         # 2nd hidden layer
         X = self.hidden2(X)
         X = self.act2(X)
         # 3rd hidden layer
         X = self.hidden3(X)
         X = self.act3(X)
+        # 3rd hidden layer
+        X = self.hidden4(X)
+        X = self.act4(X)
         # 4th hidden layer
         X = self.drop(X)
-        X = self.hidden4(X)
+        X = self.hidden5(X)
 
         return X
     
@@ -172,8 +176,8 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
 
         # Define relevant hyperparameter for the ML task
         # n_inputs = np.size(X_train, 1) # len of column # for additive encoding
-        n_inputs = np.size(X_train, 1) * 4 # for onehot encoding
-        print('n_inputs', n_inputs)
+        n_inputs = np.size(X_train, 1) # for onehot encoding
+
 
         # transform to tensor 
         tensor_X_train, tensor_y_train = to_tensor(X_train, y_train_scaled)
@@ -188,7 +192,7 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
 
         # define loss function and optimizer
         criterion = MSELoss()   
-        optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=momentum)  
+        optimizer = SGD(model.parameters(), lr=learning_rate, weight_decay=momentum)  
 
         for epoch in range(num_epochs):
             print ('\t Epoch [{}/{}]: Batch size(train)={}, Batch size(val)={}'.format(epoch+1, num_epochs, batch_size, batch_size))
@@ -241,10 +245,10 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test):
     # Define relevant hyperparameter for the ML task
     # n_inputs = np.size(X_train, 1) # len of column
     batch_size = 50
-    num_epochs = 10
+    num_epochs = 5
     k_folds = 5
-    learning_rate = 0.0051522889065098165
-    momentum = 0.009223144758744747
+    learning_rate = 0.008949941636871355
+    momentum = 0.007871981418064534
     
     # Get dataset
     # tensor_X, tensor_y = to_tensor(X_train, y_train)
@@ -274,7 +278,7 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test):
 
     # -------------------------------------------------------------
     # Evaluate model by test dataset
-    X_test = X_test.reshape(X_test.shape[0], -1)
+    X_test = X_test.reshape(X_test.shape[0], -1) #for onehot
 
     # pca_reloaded = pk.load(open('pca.pkl', 'rb'))
     # X_test = pca_reloaded.transform(X_test)
