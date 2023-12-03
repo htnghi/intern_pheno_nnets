@@ -38,43 +38,26 @@ if __name__ == '__main__':
     # print("Data dir: ", datapath)
     # print('-----------------------------------------------\n')
 
-    # read_data(datapath)
-    # read_split_train_test_data(datapath)
-    # print("Data after preprocessing: ")
-    # print(X)
-    # print(y)
-    # print('-----------------------------------------------\n')
+    # Additive Encoding
+    # read_data_pheno_additive(datapath, 3)
+    # split_train_test_data_additive(datapath, 3)
+    # X1_train, y1_train, X1_test, y1_test = load_split_train_test_additive(datapath, 3)
 
-    # split_train_test
-    X_train, y_train, X_test, y_test = get_split_train_test(datapath)
-    # ----------------------------------------------------
-    # Encode data
-    # ----------------------------------------------------
-    # X_additive_encoded = get_additive_encoding(X)
-    # print("Data after additive encoding: ")
-    # print(X_additive_encoded)
-    # print('-----------------------------------------------\n')
-
-    # X_onehot_encoded = get_onehot_encoding(X)
-    # print("Data after one-hot encoding: ")
-    # print(X_onehot_encoded)
-    # print('-----------------------------------------------\n')
-
-    #y_onehot_encoded = y_onehot(y)
-    # print("Data after one-hot encoding: ")
-    # print(y_onehot_encoded)
-    # print('-----------------------------------------------\n')
+    # One_hot Encoding
+    read_data_pheno_onehot(datapath, 1)
+    split_train_test_data_onehot(datapath, 1)
+    X1_train, y1_train, X1_test, y1_test = load_split_train_test_onehot(datapath, 1)
 
     # ----------------------------------------------------
     # Train model
     # ----------------------------------------------------
 
-    # model = run_train_CNN(datapath, X_train, y_train, X_test, y_test)
+    # model = run_train_CNN(datapath, X1_train, y1_train, X1_test, y1_test)
 
-    model = run_train_MLP(datapath, X_train, y_train, X_test, y_test)
+    # model = run_train_MLP(datapath, X1_train, y1_train, X1_test, y1_test)
 
-    # model = trial_train_and_tune_CNN(X_train, y_train)
+    model = trial_train_and_tune_CNN(datapath, X1_train, y1_train)
     
-    # model = trial_train_and_tune_MLP(datapath, X_train, y_train)
+    # model = trial_train_and_tune_MLP(datapath, X1_train, y1_train)
 
 

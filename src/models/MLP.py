@@ -151,12 +151,12 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
         y_val_scaled = minmax_scaler.fit_transform(y_val)
 
         # PCA
-        pca = PCA(n_components=218)
-        pca.fit(X_train)
-        X_train = pca.transform(X_train)
-        X_val = pca.transform(X_val)
-        pk.dump(pca, open('./pca.pkl', 'wb'))
-        print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
+        # pca = PCA(n_components=218)
+        # pca.fit(X_train)
+        # X_train = pca.transform(X_train)
+        # X_val = pca.transform(X_val)
+        # pk.dump(pca, open('./pca.pkl', 'wb'))
+        # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
 
         # Define relevant hyperparameter for the ML task
         n_inputs = np.size(X_train, 1) # len of column
@@ -167,18 +167,18 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
         
         # Define data loaders for training and testing data in this fold
         train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=batch_size, shuffle=True)    
+        val_loader = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=batch_size, shuffle=True)  
+
+        # Call model
+        model = MLP(n_inputs)
+
+        # define loss function and optimizer
+        criterion = MSELoss()   
+        optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=momentum)  
 
         for epoch in range(num_epochs):
             print ('\t Epoch [{}/{}]: Batch size(train)={}, Batch size(val)={}'.format(epoch+1, num_epochs, batch_size, batch_size))
 
-            # Call model
-            model = MLP(n_inputs)
-
-            # define loss function and optimizer
-            criterion = MSELoss()   
-            optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=momentum)
-            
             # delcare some arrays for storing the sum values of MSE
             train_loss = 0.0
             val_loss = 0.0
@@ -204,7 +204,7 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
     return model, train_loss_total, val_loss_total
 
 # -------------------------------------------------------------
-# 3. Prepare dataset
+# 3. Functions for preprocessing
 # -------------------------------------------------------------
 # Min Max Scaler
 def minmax_scaler(y):
@@ -246,11 +246,11 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test):
     model = trained_model[0]
 
     # save the trained model
-    # torch.save(model, datapath + '/utils/save_CNN.model')
+    # torch.save(model, datapath + '/utils/save_MLP.model')
 
      # load the trained model
     # print("Loading the trained CNN model ...\n")
-    # model = torch.load('datapath + '/utils/save_CNN.model')
+    # model = torch.load('datapath + '/utils/save_MLP.model')
 
     # Get train loss and val loss for plotting
     # train_loss = trained_model[1]
@@ -260,8 +260,8 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test):
 
     # -------------------------------------------------------------
     # Evaluate model by test dataset
-    pca_reloaded = pk.load(open('pca.pkl', 'rb'))
-    X_test = pca_reloaded.transform(X_test)
+    # pca_reloaded = pk.load(open('pca.pkl', 'rb'))
+    # X_test = pca_reloaded.transform(X_test)
     tensor_X_test = torch.Tensor(X_test)
     y_test = minmax_scaler(y_test)
 
@@ -279,7 +279,7 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test):
         test_r2 = r2_score(y_test, y_preds)
         test_mae = mean_absolute_error(y_test, y_preds)
 
-        print('\t \t Test - Average:   loss = {:.3f}, ExpVar = {:.3f}, R2 = {:.3f}, MAE = {:.3f}'.format(test_mse, test_exp_variance, test_r2, test_mae))
+        print('\t \t Test - Average:   loss = {:.4f}, ExpVar = {:.4f}, R2 = {:.4f}, MAE = {:.4f}'.format(test_mse, test_exp_variance, test_r2, test_mae))
 
     # Plot the model
     x_plot = np.arange(len(y_preds))
