@@ -52,9 +52,12 @@ class MLP(Module):
 
     # Forward pass
     def forward(self, X):
+        # X = X.view(X.size(0), -1)
+
         #Input to 1st hidden layer
         X = self.hidden1(X)
         X = self.act1(X)
+        
         # 2nd hidden layer
         X = self.hidden2(X)
         X = self.act2(X)
@@ -143,12 +146,21 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
         X_train, y_train = X[train_ids], y[train_ids]
         X_val, y_val = X[val_ids], y[val_ids]
 
+        # For onehot encoding
+        X_train, X_val = X_train.reshape(X_train.shape[0], -1), X_val.reshape(X_val.shape[0], -1)
+
         # MinMax Scaler
         minmax_scaler = MinMaxScaler()
         y_train = np.expand_dims(y_train, axis=1)
         y_train_scaled = minmax_scaler.fit_transform(y_train)
         y_val = np.expand_dims(y_val, axis=1)
         y_val_scaled = minmax_scaler.fit_transform(y_val)
+
+        # Normalize dataset using StandardScaler
+        # standard_scaler = StandardScaler()
+        # standard_scaler.fit(X_train)
+        # X_train = standard_scaler.transform(X_train)
+        # X_val = standard_scaler.transform(X_val)
 
         # PCA
         # pca = PCA(n_components=218)
@@ -159,12 +171,14 @@ def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
         # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
 
         # Define relevant hyperparameter for the ML task
-        n_inputs = np.size(X_train, 1) # len of column
+        # n_inputs = np.size(X_train, 1) # len of column # for additive encoding
+        n_inputs = np.size(X_train, 1) * 4 # for onehot encoding
+        print('n_inputs', n_inputs)
 
         # transform to tensor 
         tensor_X_train, tensor_y_train = to_tensor(X_train, y_train_scaled)
         tensor_X_val, tensor_y_val = to_tensor(X_val, y_val_scaled)
-        
+
         # Define data loaders for training and testing data in this fold
         train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=batch_size, shuffle=True)  
@@ -260,6 +274,8 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test):
 
     # -------------------------------------------------------------
     # Evaluate model by test dataset
+    X_test = X_test.reshape(X_test.shape[0], -1)
+
     # pca_reloaded = pk.load(open('pca.pkl', 'rb'))
     # X_test = pca_reloaded.transform(X_test)
     tensor_X_test = torch.Tensor(X_test)
