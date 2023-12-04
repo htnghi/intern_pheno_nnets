@@ -5,84 +5,105 @@ This project is about trying and testing deep neural networks for predicting phe
 ### TODO with RNN, CNN, MLP implementation
 
 Have tried to get familiar with RNN, CNN, MLP implemented by Pytorch. Now, need to implement these models as general outsources, such as
-- [x] MLP implemented by Pytorch
-- [x] CNN implemented by Pytorch
-- [ ] RNN implemented by Pytorch
+- [x] Implementing + tuning MLP with Additive + On-hot Encoding
+- [x] Implementing + tuning CNN with Additive + On-hot Encoding
+- [ ] Implementing + tuning RNN
 
 <!-- ![image info](./figures/rnn_cnn_mlp_exp_overview.png) -->
 
-### 1. Preprocessing SNP dataset
+### 1. SNP dataset
+After doing matching and eliminating NaN values:
+- Dataset of pheno1: X: (500, 10000); y: (500, 1)
 
-The dataset of pheno1 looks like:
-X: (500, 10000); 
-y: (500, 1)
+- Dataset of pheno2: X: (1000, 10000); y: (1000, 1)
 
-```python
-    sample_ids, ..., ...     pheno1
-    9387, 2 0 0 2 0 0 0 ...  7.9124
-    9367, 2 2 0 0 0 0 0 ...  12.654
-    9356, 2 0 0 0 0 2 0 ...  8.6401
-    9355, ...
-```
+- Dataset of pheno3: X: (2000, 10000); y: (2000, 1)
 
-#### Data preprocessing:
-
-<!-- ![image info](./figures/overview_datapreprocessing.svg) -->
-<img src='./figures/overview_datapreprocessing.svg' width=60% height=60%>
-
-* Data Standardization by Z-Score
-* Min-Max Scaler for Label y
-* Outliers Detection & Dimension Reduction(PCA)
-
+Data preprocessing (using sklearn library):
+- MinMax Scaler for y => give the best result for both model MLP and CNN
+- Standardization for X
+- Decomposition PCA
 
 ### 2. Training Strategy
-Get independent test dataset and train dataset:
-- Train dataset(including validation): (450, 10000)
-- Test set: (50,10000)
-
-<!-- ![image info](./figures/overview_training.svg) -->
-<img src='./figures/overview_training.svg' width=60% height=60%>
+- Get independent train dataset (90% dataset) and test dataset (10% dataset):
+- Run Cross-validation with 5 fold (combined with 5 epochs in each iteration)
 
 ### 3. Model architecture and Tuning model 
 
-<img src='./figures/models_architecture.svg'>
+<img src='./figures/models_architecture.svg' width=65% height=65% />
 
 ### 4. Results - evaluating the model in test set
 
-* **(1) MLP model**: with tuning by Optuna
+####  a. MLP model: 
 
-<p float="left">
-  <img src='./figures/MLP_loss.svg' width=40% height=40% />
-  <img src='./figures/MLP_preds_groundtrue.svg' width=35% height=35% /> 
-</p>
-<code>&nbsp;&nbsp;&nbsp;&nbsp;</code><code>&nbsp;&nbsp;&nbsp;&nbsp;</code>(Left: MLP training loss --- Right: Prediction results)
+* Range of hyperparameters for model MLP optimization by optuna
+```python
+params = {
+              'learning_rate': optuna_trial.suggest_float('learning_rate', 1e-6, 1e-2), 
+              'optimizer': optuna_trial.suggest_categorical("optimizer", ["Adam", "SGD"]),
+              'weight_decay': optuna_trial.suggest_float('weight_decay', 1e-8, 1e-2),
+              'initial_outfeatures_factor': optuna_trial.suggest_float('initial_outfeatures_factor', 0.1, 0.8),
+              'activation': optuna_trial.suggest_categorical('activation', ['leakyrelu', 'relu', 'tanh']),
+              'n_layers' : optuna_trial.suggest_int("n_layers", 1, 5),
+              'dropout' : optuna_trial.suggest_float('dropout', 0.1, 0.5, step=0.05),
+              'pca': optuna_trial.suggest_float('pca', 0.7, 0.95, step=0.05)
+              }
+```
+    => Using the best hyperparameters, the MLP prediction model was retrained on the whole training and validation data in 5-fold cross-validation.
 
-Test MLP - Average:   loss = 0.015, ExpVar = 0.607, R2 = 0.604, MAE = 0.098
+* Performance on test data - Results of Explained variance in heatmap
 
-* **(2) CNN model**: not yet tuned
+<img src='./figures/heatmap_mlp_heatmap_results_additiveencode.svg' width=50% height=50% />
 
-<p float="left">
-  <img src='./figures/CNN_loss.svg' width=40% height=40% />
-  <img src='./figures/CNN_preds_groundtrue.svg' width=35% height=35% /> 
-</p>
-<code>&nbsp;&nbsp;&nbsp;&nbsp;</code><code>&nbsp;&nbsp;&nbsp;&nbsp;</code>(Left: CNN training loss --- Right: Prediction results)
+(MLP with Additive Encoding)
 
-Test CNN - Average:   loss = 0.050, ExpVar = -0.372, R2 = -0.966, MAE = 0.186
+<img src='./figures/heatmap_mlp_heatmap_results_onehot.svg' width=50% height=50% />
+
+(MLP with One-hot Encoding)
+
+#### b. CNN model: with tuning by Optuna
+
+* Range of hyperparameters for model CNN optimization by optuna
+```python
+params = {
+              'learning_rate': optuna_trial.suggest_float('learning_rate', 1e-6, 1e-2), 
+              'optimizer': optuna_trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
+              'weight_decay': optuna_trial.suggest_float('weight_decay', 1e-4, 1e-2),
+              'kernel_size': optuna_trial.suggest_int("kernel_size", 2, 8),
+              'stride_percentage': optuna_trial.suggest_float('stride_percentage', 0.1, 1.0, step=0.1),
+              'n_layers': optuna_trial.suggest_int("n_layers", 1, 4),
+              'factor_out_linear_features': optuna_trial.suggest_float('factor_out_linear_features', 0.5, 1, step=0.1),
+              'activation1': optuna_trial.suggest_categorical('activation1', ['ReLU', 'LeakyReLU', 'Tanh']),
+              'activation2': optuna_trial.suggest_categorical('activation2', ['ReLU', 'LeakyReLU', 'Tanh']),
+              'dropout': optuna_trial.suggest_float('dropout', 0.1, 0.5),
+              'pca': optuna_trial.suggest_float('pca', 0.7, 0.95, step=0.05)
+              }
+```
+    => Using the best hyperparameters, the CNN prediction model was retrained on the whole training and validation data in 5-fold cross-validation.
+* Performance on test data - Results of Explained variance in heatmap
+
+<img src='./figures/heatmap_cnn_heatmap_results_additiveencode.svg' width=50% height=50% />
+
+(CNN with Additive Encoding)
+
+<img src='./figures/heatmap_cnn_heatmap_results_onehot.svg' width=50% height=50% />
+
+(CNN with One-hot Encoding)
+
+#### Summary:
+* Only using MinMax Scaler for both model MLP and CNN: give the best result
+* MLP: should use Additive Encoding 
+* CNN: should use One-hot Encoding
+* Increasing sample size (from pheno1(#500) -> pheno2(#1000) -> pheno3(#2000)): better prediction
+
+=> Overall performance: MLP > CNN
 
 ### 5. Next step
-* Using One-hot encoding
-* Tuning CNN model with Optuna
+
 * RNN implemented by Pytorch + Tuning with Optuna
+* Report writing
 
-### 6. Questions
-(1) The features dimension of X is too large (10000 features) + the matrix X only contains 0 and 2. 
-* -> technique for reducing the number of features and extracting only the valuable features
 
-(2) y label used Min Max Scaler -> when training model, loss MSE is very low; however, the explained variance doesn't make sense. 
-* -> technique for scailing y lael
-
-(3) CNN model is mainly used for classification task.
-* -> CNN architecture is specialized for regression.
 
 
 
