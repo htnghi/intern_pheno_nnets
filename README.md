@@ -49,7 +49,7 @@ params = {
               'pca': optuna_trial.suggest_float('pca', 0.7, 0.95, step=0.05)
               }
 ```
-    => Using the best hyperparameters, the MLP prediction model was retrained on the whole training and validation data in 5-fold cross-validation.
+=> Using the best hyperparameters, the MLP prediction model was retrained on the whole training and validation data in 5-fold cross-validation.
 
 * Performance on test data - Results of Explained variance in heatmap
 
@@ -79,7 +79,7 @@ params = {
               'pca': optuna_trial.suggest_float('pca', 0.7, 0.95, step=0.05)
               }
 ```
-    => Using the best hyperparameters, the CNN prediction model was retrained on the whole training and validation data in 5-fold cross-validation.
+=> Using the best hyperparameters, the CNN prediction model was retrained on the whole training and validation data in 5-fold cross-validation.
 * Performance on test data - Results of Explained variance in heatmap
 
 <img src='./figures/heatmap_cnn_heatmap_results_additiveencode.svg' width=50% height=50% />
