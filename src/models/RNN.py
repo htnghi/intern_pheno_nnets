@@ -1,26 +1,38 @@
-import torch
-from torchvision import datasets
-from torchvision.transforms import ToTensor
-from torch.utils.data import TensorDataset, DataLoader, random_split
-from torch import nn
-import torch.nn.functional as F
-from torch import optim
-import matplotlib.pyplot as plt
+import numpy as np
 from numpy import vstack
+from pandas import read_csv
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, average_precision_score
 from sklearn.metrics import confusion_matrix, recall_score, f1_score
-from sklearn.metrics import classification_report
-from sklearn import metrics
+from sklearn.metrics import explained_variance_score, r2_score, mean_squared_error, mean_absolute_error
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
+from sklearn.decomposition import PCA
+from torch.utils.data import Dataset, TensorDataset
+from torch.utils.data import DataLoader, SubsetRandomSampler
+from torch.utils.data import random_split
+import torch
+from torch import nn
+from torch import Tensor
+from torch.nn import Linear
+from torch.nn import ReLU, Softplus
+from torch.nn import Sigmoid
+from torch.nn import Module, Sequential
+from torch.nn import MaxPool1d, Conv1d, Flatten, LeakyReLU, BatchNorm1d, Dropout, Tanh
+from torch.optim import SGD, Adam, RMSprop
+from torch.nn import MSELoss
+from torch.nn.init import kaiming_uniform_
+from torch.nn.init import xavier_uniform_
+import time
+import copy
 import math
 
 
-# Device will determine whether to run the training on GPU or CPU.
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
-# ==============================================================
-# Build RNN Model
-# ==============================================================
+# -------------------------------------------------------------
+# 1. Build CNN Model
+# -------------------------------------------------------------
 class RNN(nn.Module):
     
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
@@ -32,207 +44,274 @@ class RNN(nn.Module):
     
     def forward(self, x):
         # Set initial hidden and cell states 
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device) 
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size)
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size)
 
         # Passing in the input and hidden state into the model and  obtaining outputs
-        out, hidden = self.lstm(x, (h0, c0))  # out: tensor of shape (batch_size, seq_length, hidden_size)
-        
+        out, hidden = self.lstm(x, (h0, c0))  
+        # print('Shape of out',out.shape)    #torch.Size([50, 10000, 128]) #(batch_size, seq_length, hidden_size)
+  
         #Reshaping the outputs such that it can be fit into the fully connected layer
-        out = self.fc(out[:, -1, :])
-        return out       
+        out = self.fc(out[:, -1, :])    
+        # print('Shape of out after reshaping',out.shape) #torch.Size([50, 1]) #(batch_size, class_num)
+
+        return out 
+
+# -------------------------------------------------------------
+# 2. The trainning loop and function validation
+# -------------------------------------------------------------
+def train_each_epoch(train_loader, model, criterion, optimizer, train_loss, train_loss_total):
+
+    # training loop with train_loader --------------------------------------------
+    for i, (inputs, targets) in enumerate(train_loader):
+        # call model train
+        model.train()
+        # get predicted outputs
+        pred_outputs = model(inputs)
+        # calculate loss
+        loss_training = criterion(pred_outputs, targets)
+        # optimizer sets to 0 gradients
+        optimizer.zero_grad()
+        # set the loss to back propagate through the network updating the weights
+        loss_training.backward()
+        # perform optimizer step
+        optimizer.step()  
+
+        # Sum up mse loss and r2, expVar, mae 
+        train_loss += loss_training.item()
     
-# ==============================================================
-# The trainning loop
-# ==============================================================
+    # Mean validating loss and other metrics for each epoch
+    train_loss_avg = train_loss/len(train_loader)
+    print('\t \t Training - Average: loss = {:.3f}'.format(train_loss_avg))
 
-def train(num_epochs, model, train_loader, learning_rate, sequence_length, input_size):
-    
-    # Define loss function
-    loss_func = nn.CrossEntropyLoss()
+    # storing total loss and metris
+    train_loss_total.append(train_loss_avg)
 
-    # Define optimization function
-    optimizer = optim.Adam(model.parameters(), lr = learning_rate)    
+    return model, train_loss_total
 
-    # Train the model
-    total_step = len(train_loader)
-        
-    for epoch in range(num_epochs):
-        for i, (input_genome, labels) in enumerate(train_loader):
-            
-            # Reshape images
-            input_genome = input_genome.to(device)
-            labels = labels.to(device)
-            print('Input_genomes: ', input_genome.shape)
-            print('label:', labels.shape)
-            # Forward pass
-            outputs = model(input_genome)
-            print('output:', outputs)
-            
-            loss = loss_func(outputs, labels)
-            # Backward and optimize
-            optimizer.zero_grad() # optimizer sets to 0 gradients so that you do the parameter update correctly
-            loss.backward()
-            print('Loss:', loss.item())
-            optimizer.step()
-            
-            # Print epoches, batches and losses
-            if (i+1) % 100 == 0:
-                print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
-                       .format(epoch + 1, num_epochs, i + 1, total_step, loss.item()))   
 
-# ==============================================================
-# Evaluating the model
-# ==============================================================
-def evaluate_model(test_loader, model):
+def validation_each_epoch(model, val_loader, criterion, val_loss, val_loss_total):
 
-    idx = 0
     model.eval()
     with torch.no_grad():
-        correct = 0
-        total = 0
+        for i, (inputs, targets) in enumerate(val_loader):
+            yhat = model(inputs)
+            loss_validation = criterion(yhat, targets)
+            
+            # Sum up loss
+            val_loss += loss_validation.item()
 
-        for input_genome, labels in test_loader:
-            input_genome = input_genome.reshape(-1, sequence_length, input_size).to(device)
-            print(input_genome[0].shape)
-            labels = labels.to(device)
-            outputs = model(input_genome)
+    # Mean validating loss for each epoch
+    val_loss_avg = val_loss/len(val_loader)
+    print('\t \t Validation - Average: loss = {:.3f}'.format(val_loss_avg))
 
-            # Get the class labels(preds)
-            # torch.max return 2 values (max_values, index). #dim=1 => maximum in each row
-            _, yhat = torch.max(outputs.data, 1)
+    # storing total loss and metris
+    val_loss_total.append(val_loss_avg)
 
-            # for confusion matrix
-            preds = yhat.detach().numpy()
-            actual = labels.numpy()
-            # target_names = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-            print(classification_report(actual, preds))
+    return val_loss_avg, val_loss_total
 
-            total = total + labels.size(0)
-            correct = correct + (yhat == labels).sum().item()
-            print('Bacht {} - Accuracy: {} %'.format(idx, 100 * correct / total))
 
-            # increase the index number
-            idx = idx + 1
+def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
 
-            # plot confusion matrix
-            disp = metrics.ConfusionMatrixDisplay.from_predictions(actual, preds)
-            disp.figure_.suptitle("Confusion Matrix")
-            print(f"Confusion matrix:\n{disp.confusion_matrix}")
-            plt.show()
+    # number of folds for cross-validation
+    kfold = KFold(n_splits=k_folds, shuffle=True)
     
-    return 0
+    # declare arrays for storing total loss and other metrics
+    train_loss_total = []
+    val_loss_total = []
 
-
-
-# ==============================================================
-# Set hyperparameters
-# ==============================================================
-# Define relevant variables for the ML task
-
-def run_train_RNN(X, y):
-
-    # Define relevant hyperparameter for the ML task
-    sequence_length = 4
-    input_size = 2000
-    hidden_size = 128
-    num_layers = 2
-    num_classes = 4
-    batch_size = 100
-    num_epochs = 2
-    learning_rate = 0.01
+    # define for holding the best model
+    best_loss = np.inf
+    best_weights = None
+    best_epoch = 0
+    best_fold  = 0
     
-    # transform to torch tensor
-    #y1 = y.reshape(len(y), 1)
-    tensor_x = torch.Tensor(X)
+    for fold, (train_ids, val_ids) in enumerate(kfold.split(X, y)):
+        print('FOLD {}: len(train)={}, len(val)={}'.format(fold+1, len(train_ids), len(val_ids)))
+
+        # extract X, y for training and validating
+        X_train, y_train = X[train_ids], y[train_ids]
+        X_val, y_val = X[val_ids], y[val_ids]
+
+        # MinMax Scaler
+        minmax_scaler = MinMaxScaler()
+        y_train = np.expand_dims(y_train, axis=1)
+        y_train_scaled = minmax_scaler.fit_transform(y_train)
+        y_val = np.expand_dims(y_val, axis=1)
+        y_val_scaled = minmax_scaler.fit_transform(y_val)
+
+        # Normalize dataset using StandardScaler
+        # standard_scaler = StandardScaler()
+        # standard_scaler.fit(X_train)
+        # X_train = standard_scaler.transform(X_train)
+        # X_val = standard_scaler.transform(X_val)
+
+        # PCA
+        # pca = PCA(n_components=218)
+        # pca.fit(X_train)
+        # X_train = pca.transform(X_train)
+        # X_val = pca.transform(X_val)
+        # pk.dump(pca, open('./pca.pkl', 'wb'))
+        # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
+
+        # Define relevant hyperparameter for the RNN task
+        # n_inputs = 1 # for additive encoding
+        sequence_length = np.size(X_train, 1) # len of column
+        input_size = 4 #for onehot
+        hidden_size = 128
+        num_layers = 3
+        num_classes = 1
+
+        # transform to tensor 
+        tensor_X_train, tensor_y_train = to_tensor(X_train, y_train_scaled)
+        tensor_X_val, tensor_y_val = to_tensor(X_val, y_val_scaled)
+        
+        # tensor_X_train, tensor_X_val = tensor_X_train.unsqueeze(1), tensor_X_val.unsqueeze(1) # for additive encoding
+        # tensor_X_train, tensor_X_val = torch.swapaxes(tensor_X_train, 1, 2), torch.swapaxes(tensor_X_val, 1, 2) #for onehot
+        
+        # Define data loaders for training and testing data in this fold
+        train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=batch_size, shuffle=True)  
+
+        # Call model
+        model = RNN(input_size, hidden_size, num_layers, num_classes)
+
+        # define loss function and optimizer
+        criterion = MSELoss()   
+        optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=momentum)  
+
+        for epoch in range(num_epochs):
+            print ('\t Epoch [{}/{}]: Batch size(train)={}, Batch size(val)={}'.format(epoch+1, num_epochs, batch_size, batch_size))
+
+            # delcare some arrays for storing the sum values of MSE
+            train_loss = 0.0
+            val_loss = 0.0
+
+            # training loop with train_loader --------------------------------------------
+            model, train_loss_total = train_each_epoch(train_loader, model, criterion, optimizer, train_loss, train_loss_total)
+
+            # Validate with val_loader -------------------------------------------------
+            val_loss_avg, val_loss_total = validation_each_epoch(model, val_loader, criterion, val_loss, val_loss_total)
+        
+            # hold the best loss (also the best model)
+            if val_loss_avg < best_loss:
+                best_fold = fold+1
+                best_epoch = epoch+1
+                best_loss = val_loss_avg
+                best_weights = copy.deepcopy(model.state_dict())
+
+        # restore model
+        model.load_state_dict(best_weights)
+    print('Best loss_MSE={:.4f} at fold {} and epoch {}'.format(best_loss, best_fold, best_epoch))
+    print('-----------------------------------------------\n')       
+
+    return model, train_loss_total, val_loss_total
+
+# -------------------------------------------------------------
+# 3. Functions for preprocessing
+# -------------------------------------------------------------
+# Min Max Scaler
+def minmax_scaler(y):
+    minmax_scaler = MinMaxScaler()
+    y = np.expand_dims(y, axis=1)
+    y_scaled = minmax_scaler.fit_transform(y)
+    return  y_scaled
+
+# transform dataset to Tensor
+def to_tensor(X, y):
+    tensor_X = torch.Tensor(X)
     tensor_y = torch.Tensor(y)
-
-    # create dataset
-    RNN_dataset = TensorDataset(tensor_x, tensor_y)
-    # split train and test
-    train_size = int(0.8 * len(RNN_dataset))
-    test_size = len(RNN_dataset) - train_size
-    train_data, test_data = random_split(RNN_dataset, [train_size, test_size])
-
-    # Dataloader for train and test
-    train_loader = DataLoader(dataset = train_data, batch_size = batch_size, shuffle = True, num_workers=0)
-    test_loader = DataLoader(dataset = test_data, batch_size = 10000, shuffle = True, num_workers=0)
-    xmatrix,ytarget = next(iter(train_loader))
-    print(ytarget)
-    print('Shape of ytarget: ', ytarget.shape)
-    # print('Shpe od dataloader:', xmatrix.shape, ytarget.shape)
-    # print('Train_data and test_data: ', train_data, test_data)
-    # print('Dataloader: ', train_loader)
-
-    # Call model
-    model = RNN(input_size, hidden_size, num_layers, num_classes).to(device)
-
-    # Training model
-    train(num_epochs, model, train_loader, learning_rate, sequence_length, input_size)
-
-    return model
-
-# ==============================================================
-# Load dataset
-# ==============================================================
-# Create Training and Testing dataset
-# train_data = datasets.MNIST(root = './data', train = True, transform = ToTensor(), download = True)
-# test_data = datasets.MNIST(root = './data', train = False, transform = ToTensor(), download = True)
-
-# Dataloader for train and test
-# train_loader = DataLoader(dataset = train_data, batch_size = batch_size, shuffle = True, num_workers=0)
-# test_loader = DataLoader(dataset = test_data, batch_size = 10000, shuffle = True, num_workers=0)
-
-# # ==============================================================
-# Visualization of MNIST dataset
-# ==============================================================
-# Plot the first image in test loader
-# plt.imshow(test_data.data[0], cmap='gray')
-# plt.title('%i' % test_data.targets[0])
-# plt.show()
-
-# Plot multiple train data
-# figure = plt.figure(figsize=(10, 8))
-# cols, rows = 5, 5
-# for i in range(1, cols * rows + 1):
-#     sample_idx = torch.randint(len(test_data), size=(1,)).item()
-#     img, label = test_data[sample_idx]
-#     figure.add_subplot(rows, cols, i)
-#     plt.title(label)
-#     plt.axis("off")
-#     plt.imshow(img.squeeze(), cmap="gray")
-# plt.show()
+    return tensor_X, tensor_y
 
 # ==============================================================
 # Call and train model
 # ==============================================================
-# print("Initializing RNN model ...\n")
-# model = RNN(input_size, hidden_size, num_layers, num_classes).to(device)
+def run_train_RNN(datapath, X_train, y_train, X_test, y_test):
 
-# train(num_epochs, model, train_loader)
+    # Define relevant hyperparameter for general DL task
+    batch_size = 50
+    num_epochs = 5
+    k_folds = 5
+    learning_rate = 0.0025000721669496077
+    momentum = 0.006585441923995726
 
-# save the trained model
-# torch.save(model, "./trained_model/pytorch_rnn_mnist.model")
+    
+    # Get dataset
+    # tensor_X, tensor_y = to_tensor(X_train, y_train)
+   
+    # # Call model
+    # model = CNN1D(n_inputs)
 
-# load the trained model
-# print("Loading the trained RNN model ...\n")
-# model = torch.load("./trained_model/pytorch_rnn_mnist.model")
+    # Training model
+    trained_model = train_model(num_epochs, X_train, y_train, k_folds, batch_size, learning_rate, momentum)
 
-# get some random training images
-# print("Evaluating the model ...\n")
-# results = evaluate_model(test_loader, model)
+    # Get model
+    # specify the zeroth index for the return of model
+    model = trained_model[0]
 
-# sample = next(iter(test_loader))
-# imgs, lbls = sample
-# print("len(imgs):{}, len(lbls):{}".format(len(imgs), len(lbls)))
+    # save the trained model
+    # torch.save(model, datapath + '/utils/save_MLP.model')
 
-# test_output = model(imgs[:].view(-1, 28, 28))
-# predicted = torch.max(test_output, 1)[1].data.numpy().squeeze()
-# labels = lbls[:].numpy()
-# target_names = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-# print(classification_report(labels, predicted, target_names=target_names))
+     # load the trained model
+    # print("Loading the trained CNN model ...\n")
+    # model = torch.load('datapath + '/utils/save_MLP.model')
 
-# disp = metrics.ConfusionMatrixDisplay.from_predictions(lbls, predicted)
-# disp.figure_.suptitle("Confusion Matrix")
-# print(f"Confusion matrix:\n{disp.confusion_matrix}")
-# plt.show()
+    # Get train loss and val loss for plotting
+    # train_loss = trained_model[1]
+    # val_loss = trained_model[2]
+    # print('Values of training loss: ', train_loss)
+    # print('Values of validating loss: ', val_loss)
+
+    # -------------------------------------------------------------
+    # Evaluate model by test dataset
+    # standard_scaler = StandardScaler()
+    # X_test = standard_scaler.fit_transform(X_test)
+    
+    # pca_reloaded = pk.load(open('pca.pkl', 'rb'))
+    # X_test = pca_reloaded.transform(X_test)
+    tensor_X_test = torch.Tensor(X_test)
+
+    # Encoding
+    # tensor_X_test = tensor_X_test.unsqueeze(1) # only for additive encoding
+    # tensor_X_test = torch.swapaxes(tensor_X_test, 1, 2) #for onehot
+
+    y_test = minmax_scaler(y_test)
+
+    model.eval()
+    with torch.no_grad():
+        y_preds = model(tensor_X_test)
+
+        # change to numpy for calculating metrics in scikit learn library
+        y_preds = y_preds.detach().squeeze().numpy()
+        y_test  = y_test.squeeze()
+
+        # collect mse, r2, explained variance
+        test_mse = mean_squared_error(y_test, y_preds)
+        test_exp_variance = explained_variance_score(y_test, y_preds)
+        test_r2 = r2_score(y_test, y_preds)
+        test_mae = mean_absolute_error(y_test, y_preds)
+
+        print('\t \t Test - Average:   loss = {:.4f}, ExpVar = {:.4f}, R2 = {:.4f}, MAE = {:.4f}'.format(test_mse, test_exp_variance, test_r2, test_mae))
+
+    # Plot the model
+    x_plot = np.arange(len(y_preds))
+    plt.scatter(x_plot, y_test, alpha=0.5, label='ground_true')
+    plt.plot(x_plot, y_preds, label='prediction', color='r')
+
+    plt.xlabel('Samples', fontsize=13)
+    plt.ylabel('Pheno1 (g)', fontsize=13)
+    plt.grid()
+    plt.legend()
+    plt.savefig(datapath + '/utils/MLP_preds_groundtrue.svg', bbox_inches='tight')
+    plt.show()
+ 
+
+    return model
+
+
+ 
+
+
+
+
+
