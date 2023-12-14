@@ -119,7 +119,7 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
 
     # define loss function and optimizer
     loss_function = torch.nn.MSELoss()
-    optimizer = Adam(model.parameters(),
+    optimizer = getattr(optim, tuning_params['optimizer'])(model.parameters(),
                     lr=tuning_params['learning_rate'], weight_decay=tuning_params['weight_decay'])
     
     # track the best loss value and best model
@@ -153,7 +153,7 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
         #     model = best_model
         #     return predict(model, val_loader), early_stopping_point
         
-        if epoch >= 20 and epochs_improvement >= early_stop_patience:
+        if epoch >= 25 and epochs_improvement >= early_stop_patience:
             print("Early Stopping at epoch " + str(epoch))
             early_stopping_point = epoch - early_stop_patience
             model = best_model
@@ -171,11 +171,12 @@ def objective(trial, X, y):
     training_params_dict['batch_size'] = 32
     training_params_dict['n_epochs']   = 200
     training_params_dict['width_onehot'] = 4
-    training_params_dict['early_stop_patience'] = 30
+    training_params_dict['early_stop_patience'] = 25
 
     # for tuning parameters
     tuning_params_dict = {
         'learning_rate': trial.suggest_float('learning_rate', 1e-6, 1e-1), 
+        'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
         'weight_decay': trial.suggest_float('weight_decay', 1e-8, 1e-2),
         'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.01, 0.8, step=0.01),
         'activation': trial.suggest_categorical('activation', ['leakyrelu', 'relu', 'tanh']),
