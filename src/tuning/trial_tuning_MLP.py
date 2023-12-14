@@ -1,283 +1,305 @@
-import numpy as np
+import json
+import copy
+import torch
+import optuna
+import sklearn
 
+import numpy as np
 import pandas as pd
+
 from pandas import read_csv
 
-from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
-from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, average_precision_score
-from sklearn.metrics import confusion_matrix, recall_score, f1_score
-from sklearn.metrics import explained_variance_score, r2_score, mean_squared_error, mean_absolute_error
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import KFold
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
+from sklearn.model_selection import KFold
+
+from torch import optim
+
+from torch.nn import Sequential, MaxPool1d, Flatten, LeakyReLU, BatchNorm1d, Dropout, Linear, ReLU, Tanh
+
+from torch.optim import SGD, Adam
 
 from torch.utils.data import Dataset, TensorDataset
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.utils.data import random_split
 
-import pickle as pk
-
-from torch.nn import MSELoss
-from torch.nn import Sequential, MaxPool1d, Flatten, LeakyReLU, BatchNorm1d, Dropout, Linear, ReLU, Tanh
-from torch.optim import SGD, Adam
-
-import torch
-from torch import optim
-
-import optuna
-import json
-import time
-import copy
-import math
-
+# ==============================================================
+# Utils/Help function
+# ==============================================================
+def get_activation_func(name):
+    act_func = Tanh()
+    if name == 'relu':
+        act_func = ReLU()
+    elif name == 'leakyrelu':
+        act_func = LeakyReLU()
+    return act_func
 
 # ==============================================================
-# Build MLP Model
+# Define MLP Model
 # ==============================================================
-def MLP(optuna_trial, in_features, n_layers, initial_outfeatures_factor, dropout, activation, n_outputs):
+def MLP(optuna_trial, in_features, tuning_params):
     """
     Generate sequential network model with optuna optimization.
 
     :param optuna_trial: optuna trial class
     :param in_features: num of input nodes
     :param n_layers: num of hidden layers
+    :param initial_outfeatures_factor: init the number of out features
     :param dropout: perc of final layer dropout
+    :param activation: name of activation function
     :param n_output: num of output nodes
     :return: sequential multi layer perceptron model 
     """
-
+    n_outputs = 1
     layers = []
-    fc_layer = in_features
-
-    
-    for i in range(n_layers): 
-        # print('In_features', in_features)
-        # out_features = optuna_trial.suggest_int("n_units_l{}".format(i), 30, 300)
-        # out_features = optuna_trial.suggest_int("n_units_l{}".format(i), 30, 7000)
-        out_features = int(in_features * initial_outfeatures_factor)
-
-        # print('Out_features', out_features)
+    for i in range(tuning_params['n_layers']): 
+        out_features = int(in_features * tuning_params['initial_outfeatures_factor'])
         layers.append(Linear(in_features, out_features))
-        if activation == 'relu':
-            layers.append(ReLU())
-        elif activation == 'leakyrelu':
-            layers.append(LeakyReLU())
-        else:
-            layers.append(Tanh())     
+        act_layer = get_activation_func(tuning_params['activation'])
+        layers.append(act_layer)     
         in_features = out_features
-
-    layers.append(Dropout(dropout))
+    layers.append(Dropout(tuning_params['dropout']))
     layers.append(Linear(in_features, n_outputs))
 
     return Sequential(*layers)
-    
-# ==============================================================
-# The trainning loop
-# ==============================================================
-def train_model(num_epochs, X, y, batch_size, params, optuna_trial):
 
-    # declare arrays for storing total loss and other metrics
+# ==============================================================
+# Define training and validation loop
+# ==============================================================
+def train_one_epoch(model, train_loader, loss_function, optimizer):
+
+    for i, (inputs, targets) in enumerate(train_loader):
+        model.train()
+        pred_outputs = model(inputs)
+        targets = targets.reshape((targets.shape[0], 1))
+        loss_training = loss_function(pred_outputs, targets)
+        optimizer.zero_grad()
+        loss_training.backward()
+        optimizer.step()
+
+def validate_one_epoch(model, val_loader, loss_function):
+
+    # arrays for tracking eval results
+    avg_loss = 0.0
     arr_val_losses = []
-    arr_r2_scores = []
-    arr_exp_vars = []
 
-    # split X, y for training and validating
-    X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=0.8, shuffle=True)
+    # evaluate the trained model
+    model.eval()
+    with torch.no_grad():
+        for i, (inputs, targets) in enumerate(val_loader):
+            # cast the inputs and targets into float
+            inputs, targets = inputs.float(), targets.float()
+            targets = targets.reshape((targets.shape[0], 1))
+            outputs = model(inputs)
+            loss = loss_function(outputs, targets)
+            arr_val_losses.append(loss.item())
 
-    # For onehot encoding
-    X_train, X_val = X_train.reshape(X_train.shape[0], -1), X_val.reshape(X_val.shape[0], -1)
+    avg_loss = np.average(arr_val_losses)
+    return avg_loss
 
-    # MinMax Scaler
-    minmax_scaler = MinMaxScaler()
-    y_train = np.expand_dims(y_train, axis=1)
-    y_train_scaled = minmax_scaler.fit_transform(y_train)
-    y_val = np.expand_dims(y_val, axis=1)
-    y_val_scaled = minmax_scaler.fit_transform(y_val)
+def predict(model, val_loader):
+    model.eval()
+    predictions = None
+    with torch.no_grad():
+        for i, (inputs, targets) in enumerate(val_loader):
+            inputs  = inputs.float()
+            outputs = model(inputs)
+            predictions = torch.clone(outputs) if predictions is None else torch.cat((predictions, outputs))
+    return predictions.detach().numpy()
 
-    # Normalize dataset using StandardScaler
-    # standard_scaler = StandardScaler()
-    # standard_scaler.fit(X_train)
-    # X_train = standard_scaler.transform(X_train)
-    # X_val = standard_scaler.transform(X_val)
+def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_val, y_val):
 
-    # PCA
-    # pca = PCA(params['pca'])
-    # pca.fit(X_train)
-    # X_train = pca.transform(X_train)
-    # X_val = pca.transform(X_val)
-    # pk.dump(pca, open('./pca.pkl', 'wb'))
-    # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
-        
-    # get the number of features
-    num_features = np.size(X_train, 1)
+    # transform data to tensor format
+    tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train)
+    tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val)
 
-    # transform to tensor 
-    tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train_scaled)
-    tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val_scaled)
-        
-    # define data loaders for training and testing data in this fold
-    train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=batch_size, shuffle=True) 
+    # define data loaders for training and testing data
+    train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=training_params['batch_size'], shuffle=True)
+    val_loader   = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=training_params['batch_size'], shuffle=True)
 
-    # creat the model object
-    model = MLP(optuna_trial,
-        in_features = num_features,
-        n_layers  = params['n_layers'],
-        initial_outfeatures_factor = params['initial_outfeatures_factor'],
-        dropout   = params['dropout'],
-        activation = params['activation'],
-        n_outputs = 1)
-        
     # define loss function and optimizer
-    criterion = MSELoss()   
-    optimizer = getattr(optim, params['optimizer'])(model.parameters(), lr= params['learning_rate'], weight_decay=params['weight_decay'])
+    loss_function = torch.nn.MSELoss()
+    optimizer = Adam(model.parameters(),
+                    lr=tuning_params['learning_rate'], weight_decay=tuning_params['weight_decay'])
     
-    try:   
-        for epoch in range(num_epochs):
-            
-            # iterate through training data loader
-            for i, (inputs, targets) in enumerate(train_loader):
-                model.train()
-                pred_outputs = model(inputs)
-                loss_training = criterion(pred_outputs, targets)
-                optimizer.zero_grad()
-                loss_training.backward()
-                optimizer.step() 
+    # track the best loss value and best model
+    best_model = copy.deepcopy(model)
+    best_loss  = None
 
-            # model evaluation in each epoch
-            epoch_val_losses = []
-            epoch_val_expvars = []
-            epoch_val_r2scors = []
+    # track the epoch with best values
+    epochs_improvement = 0
+    early_stopping_point = None
 
-            model.eval()
-            with torch.no_grad():
-                for i, (inputs, targets) in enumerate(val_loader):
-
-                    # cast the inputs and targets into float
-                    inputs, targets = inputs.float(), targets.float()
-
-                    # make sure the targets reshaped
-                    targets = targets.reshape((targets.shape[0], 1))
-                    
-                    # perform forward pass
-                    test_outputs = model(inputs)
-
-                    # record the loss for each step to calculate the avg afterward
-                    test_loss = criterion(test_outputs, targets)
-                    epoch_val_losses.append(test_loss.item())
-
-                    # calculate the exp_var to check during optuna tuning
-                    np_targets = targets.squeeze().numpy()
-                    np_predics = test_outputs.detach().squeeze().numpy()
-                    
-                    test_expvar = explained_variance_score(np_targets, np_predics, force_finite=False)
-                    test_r2scor = r2_score(np_targets, np_predics)
-                    epoch_val_expvars.append(test_expvar)
-                    epoch_val_r2scors.append(test_r2scor)
-            
-            epoch_avg_loss = np.average(epoch_val_losses)
-            arr_val_losses.append(epoch_avg_loss)
-
-            # check the explained variance and r2score of validation phase after each epoch
-            epoch_avg_expvar = np.average(epoch_val_expvars)
-            epoch_avg_r2scor = np.average(epoch_val_r2scors)
-            print("Validation phase, epoch {}: avg_expvar={:.3f}, avg_r2score={:.3f}, avg_mseloss={:.3f}".format(epoch, 
-                                                epoch_avg_expvar, epoch_avg_r2scor, epoch_avg_loss))
-            
-            # try to tune with r2_score
-            arr_r2_scores.append(epoch_avg_r2scor)
-            arr_exp_vars.append(epoch_avg_expvar)
-                    
-        # time_delta = time.time() - start
-        # print('Training time in {:.0f}m {:.0f}s'.format(time_delta // 60, time_delta % 60))
-        print("--------------------------------------------------------------------")
-        print("")
-        
-        return arr_val_losses
-        # return arr_r2_scores
-        # return arr_exp_vars
-
-    except ValueError as e:
-        # Check if the error is related to NaN values
-        if "Input contains NaN" in str(e):
-            raise optuna.exceptions.TrialPruned()
+    # training loop over epochs
+    num_epochs = training_params['n_epochs']
+    early_stop_patience = training_params['early_stop_patience']
+    for epoch in range(num_epochs):
+        train_one_epoch(model, train_loader, loss_function, optimizer)
+        val_loss = validate_one_epoch(model, val_loader, loss_function)
+        if best_loss == None or val_loss < best_loss:
+            best_loss = val_loss
+            best_model = copy.deepcopy(model)
+            epochs_improvement = 0
         else:
-            # If it's another type of ValueError, raise it again
-            raise
+            epochs_improvement += 1
+        
+        print('Epoch ' + str(epoch) + ' of ' + str(num_epochs))
+        print('Current val_loss=' + str(val_loss) + ', best val_loss=' + str(best_loss))
 
-# ==========================================================
-# Objective function for tuning hyper-parameters
-# ==========================================================
-def objective(X, y, optuna_trial):
-    """
-    Objective function to run bayesian hyperparameter tuning
-
-    :param trial: optuna study
-    :param checkpoint_dir: checkpoint dir args
-    :param cfg: config file
-    :return: mean RMSE test loss
-    """
-    print("")
-
-    # for tuning samples 
-    params = {
-              'learning_rate': optuna_trial.suggest_float('learning_rate', 1e-6, 1e-2), 
-              'optimizer': optuna_trial.suggest_categorical("optimizer", ["Adam", "SGD"]),
-              'weight_decay': optuna_trial.suggest_float('weight_decay', 1e-8, 1e-2),
-              'initial_outfeatures_factor': optuna_trial.suggest_float('initial_outfeatures_factor', 0.01, 0.8, step=0.01),
-              'activation': optuna_trial.suggest_categorical('activation', ['leakyrelu', 'relu', 'tanh']),
-              'n_layers' : optuna_trial.suggest_int("n_layers", 1, 5),
-              'dropout' : optuna_trial.suggest_float('dropout', 0.1, 0.5, step=0.05),
-              'pca': optuna_trial.suggest_float('pca', 0.7, 0.95, step=0.05)
-              }
+        # try to stop early
+        # if epoch >= 20 and epochs_improvement >= tuning_params['early_stop_patience']:
+        #     print("Early Stopping at epoch " + str(epoch))
+        #     early_stopping_point = epoch - tuning_params['early_stop_patience']
+        #     model = best_model
+        #     return predict(model, val_loader), early_stopping_point
+        
+        if epoch >= 20 and epochs_improvement >= early_stop_patience:
+            print("Early Stopping at epoch " + str(epoch))
+            early_stopping_point = epoch - early_stop_patience
+            model = best_model
+            return predict(model, val_loader), early_stopping_point
     
-    # num epochs for training
-    num_epochs = 5
-    batch_size = 50
-
-    # call the train model
-    val_loss = train_model(num_epochs, X, y, batch_size, params, optuna_trial) 
-    # r2_score = train_model(num_epochs, X, y, batch_size, params, optuna_trial)
-    # exp_var = train_model(num_epochs, X, y, batch_size, params, optuna_trial)
-
-    # return the mean MSE loss
-    mean_loss = np.mean(val_loss)
-    # mean_r2score = np.mean(r2_score)
-    # mean_expvar = np.mean(exp_var)
-
-    # sumarize loss values
-    print("Summary: max_loss={}, min_loss={}, avg_loss={} \n".format(np.max(val_loss), np.min(val_loss), mean_loss))
-    # print("Summary: max_r2score={}, min_r2score={}, avg_r2score={} \n".format(np.max(r2_score), np.min(r2_score), mean_r2score))
-    # print("Summary: max_expvar={}, min_expvar={}, avg_expvar={} \n".format(np.max(exp_var), np.min(exp_var), mean_expvar))
-
-    return mean_loss
-    # return mean_r2score
-    # return mean_expvar
-
+    return predict(best_model, val_loader), early_stopping_point
 
 # ==============================================================
-# Call and train model
+# Define objective function for tuning hyperparameters
 # ==============================================================
-def trial_train_and_tune_MLP(datapath, X, y):
+def objective(trial, X, y):
 
-    # init optuna tuning object
-    num_trials = 15
-    search_space = optuna.create_study(direction ="minimize", sampler=optuna.samplers.TPESampler())
-    # search_space = optuna.create_study(direction ="maximize", sampler=optuna.samplers.TPESampler())
-    search_space.optimize(lambda trial: objective(X, y, trial), n_trials=num_trials)
+    # for extracting related parameters of training
+    training_params_dict = {}
+    training_params_dict['batch_size'] = 32
+    training_params_dict['n_epochs']   = 200
+    training_params_dict['width_onehot'] = 4
+    training_params_dict['early_stop_patience'] = 30
 
-    model_params = search_space.best_trial.params
-    model_params['optuna_best_trial_number'] =  search_space.best_trial.number 
-    model_params['optuna_best_trial_value'] = float(np.round(search_space.best_value, 6))
-    model_params["n_trials"] = num_trials
+    # for tuning parameters
+    tuning_params_dict = {
+        'learning_rate': trial.suggest_float('learning_rate', 1e-6, 1e-1), 
+        'weight_decay': trial.suggest_float('weight_decay', 1e-8, 1e-2),
+        'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.01, 0.8, step=0.01),
+        'activation': trial.suggest_categorical('activation', ['leakyrelu', 'relu', 'tanh']),
+        'n_layers': trial.suggest_int("n_layers", 1, 5),
+        'dropout': trial.suggest_float('dropout', 0.1, 0.5, step=0.05),
+        # 'early_stop_patience': trial.suggest_int("early_stop_patience", 0, 6, step=2),
+        'pca': trial.suggest_float('pca', 0.7, 0.95, step=0.05)
+    }
 
-    with open(f"./tuning_mlp_model_with_optuna_num_trials_" + str(num_trials) + ".json", 'w') as fp:
-        json.dump(model_params, fp)
+    # log early stopping point at each fold
+    early_stopping_points = []
+
+    # create model
+    num_features = X.shape[1]
+    try:
+        model = MLP(trial, in_features=num_features, tuning_params=tuning_params_dict)
+    except Exception as err:
+        print('Trial failed. Error in model creation, {}'.format(err))
+        raise optuna.exceptions.TrialPruned()
     
-    print()
-    print('----------------------------------------------------')
-    print("Tuning MLP model with Optuna: ")
-    print("The result is writen at ./tuning/" + "tuning_mlp_model_with_optuna_num_trials_" + str(num_trials) + ".json")
-    print('----------------------------------------------------\n')
+    # iterate for training and tuning
+    print("Params for Trial " + str(trial.number))
+    print(trial.params)
 
-    return 0
+    # tracking the results
+    objective_values = []
+
+    # forl cross-validation kfolds, default = 5 folds
+    kfold = KFold(n_splits=5, shuffle=True)
+
+     # main loop with cv-folding
+    for fold, (train_ids, val_ids) in enumerate(kfold.split(X, y)):
+
+        # prepare data for training and validating in each fold
+        print('Fold {}: len(train_ids)={:5d}, len(val_ids)={:5d}'.format(fold, len(train_ids), len(val_ids)))
+        X_train, y_train, X_val, y_val = X[train_ids], y[train_ids], X[val_ids], y[val_ids]
+
+        # call training model over each fold
+        try:
+            y_pred, stopping_point = train_val_loop(model, training_params_dict, tuning_params_dict,
+                                     X_train, y_train, X_val, y_val)
+            
+            # record the early-stopping points
+            if stopping_point is not None:
+                early_stopping_points.append(stopping_point)
+            else:
+                early_stopping_points.append(training_params_dict['n_epochs'])
+            
+            # calculate objective value
+            obj_value = sklearn.metrics.mean_squared_error(y_true=y_val, y_pred=y_pred)
+
+            # report pruned values
+            trial.report(value=obj_value, step=fold)
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+            
+            # accumulate the obj val losses
+            objective_values.append(obj_value)
+
+        # for pruning the tuning process
+        except (RuntimeError, TypeError, ValueError) as exc:
+            print(exc)
+            if 'out of memory' in str(exc):
+                print('Out of memory')
+            else:
+                print('Trial failed. Error in optim loop.')
+            raise optuna.exceptions.TrialPruned()
+    
+    # return the average val loss
+    current_val_result = float(np.mean(objective_values))
+
+    # Average value of early stopping points of all innerfolds for refitting of final model
+    early_stopping_point = int(np.mean(early_stopping_points))
+    print("Average early_stopping_point:", early_stopping_point)
+
+
+    print('----------------------------------------------\n')
+
+    return current_val_result
+
+# ==============================================================
+# Call tuning function
+# ==============================================================
+def tuning_MLP(datapath, X, y):
+
+    # for tracking the best validation result
+    best_val_result = None
+    overall_results = {}
+
+    # create an optuna tuning object, num trials default = 20
+    num_trials = 120
+    study = optuna.create_study(
+        direction ="minimize",
+        sampler=optuna.samplers.TPESampler(seed=42),
+        pruner=optuna.pruners.PercentilePruner(percentile=80, n_min_trials=20)
+    )
+    
+    # searching loop with objective tuning
+    study.optimize(lambda trial: objective(trial, X, y), n_trials=num_trials)
+
+
+    # print statistics after tuning
+    print("Optuna study finished, study statistics:")
+    print("  Finished trials: ", len(study.trials))
+    print("  Pruned trials: ", len(study.get_trials(states=(optuna.trial.TrialState.PRUNED,))))
+    print("  Completed trials: ", len(study.get_trials(states=(optuna.trial.TrialState.COMPLETE,))))
+    print("  Best Trial: ", study.best_trial.number)
+    print("  Value: ", study.best_trial.value)
+    print("  Params: ")
+    for key, value in study.best_trial.params.items():
+        print("    {}: {}".format(key, value))
+
+    print('----------------------------------------------\n')
+
+    best_params = study.best_trial.params
+    overall_results[key] = {'best_params': best_params}
+
+    
+    # model_params = study.best_trial.params
+    # model_params['optuna_best_trial_number'] =  study.best_trial.number 
+    # model_params['optuna_best_trial_value'] = float(np.round(study.best_value, 6))
+    # model_params["n_trials"] = num_trials
+
+    with open(f"./tuning_mlp_num_trials_" + str(num_trials) + ".json", 'w') as fp:
+        json.dump(best_params, fp)
+
+    return overall_results
