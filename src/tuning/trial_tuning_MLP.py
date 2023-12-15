@@ -27,12 +27,40 @@ from torch.utils.data import random_split
 # Utils/Help function
 # ==============================================================
 def get_activation_func(name):
-    act_func = Tanh()
-    if name == 'relu':
+    if name == 'ReLU':
         act_func = ReLU()
-    elif name == 'leakyrelu':
+    elif name == 'LeakyReLU' :
         act_func = LeakyReLU()
+    else:
+        act_func = Tanh()
     return act_func
+
+# MinMax Scaler
+def preprocess_mimax_scaler(y_train, y_val):
+    minmax_scaler = MinMaxScaler()
+    y_train = np.expand_dims(y_train, axis=1)
+    y_val = np.expand_dims(y_val, axis=1)
+    y_train_scaled = minmax_scaler.fit_transform(y_train)
+    y_val_scaled   = minmax_scaler.transform(y_val)
+    return y_train_scaled, y_val_scaled
+
+# normalize dataset using StandardScaler
+def preprocess_standard_scaler(X_train, X_val):
+    standard_scaler = StandardScaler()
+    standard_scaler.fit(X_train)
+    X_train_scaled = standard_scaler.transform(X_train)
+    X_val_scaled   = standard_scaler.transform(X_val)
+    return X_train_scaled, X_val_scaled
+
+# Decomposition PCA
+def decomposition_PCA(X_train, X_val, tuning_params):
+    pca = PCA(tuning_params['pca'])
+    pca.fit(X_train)
+    X_train_scaled = pca.transform(X_train)
+    X_val_scaled = pca.transform(X_val)
+    # pk.dump(pca, open('./pca.pkl', 'wb'))
+    # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
+    return X_train_scaled, X_val_scaled
 
 # ==============================================================
 # Define MLP Model
@@ -175,11 +203,11 @@ def objective(trial, X, y):
 
     # for tuning parameters
     tuning_params_dict = {
-        'learning_rate': trial.suggest_float('learning_rate', 1e-6, 1e-1), 
+        'learning_rate': trial.suggest_float('learning_rate', 1e-6, 1e-2), 
         'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
-        'weight_decay': trial.suggest_float('weight_decay', 1e-8, 1e-2),
-        'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.01, 0.8, step=0.01),
-        'activation': trial.suggest_categorical('activation', ['leakyrelu', 'relu', 'tanh']),
+        'weight_decay': trial.suggest_float('weight_decay', 1e-10, 1e-2),
+        'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.01, 0.7, step=0.02),
+        'activation': trial.suggest_categorical('activation', ['LeakyReLU', 'ReLUlu', 'Tanh']),
         'n_layers': trial.suggest_int("n_layers", 1, 5),
         'dropout': trial.suggest_float('dropout', 0.1, 0.5, step=0.05),
         # 'early_stop_patience': trial.suggest_int("early_stop_patience", 0, 6, step=2),
@@ -213,6 +241,11 @@ def objective(trial, X, y):
         # prepare data for training and validating in each fold
         print('Fold {}: len(train_ids)={:5d}, len(val_ids)={:5d}'.format(fold, len(train_ids), len(val_ids)))
         X_train, y_train, X_val, y_val = X[train_ids], y[train_ids], X[val_ids], y[val_ids]
+
+        # Preprocessing data
+        y_train, y_val = preprocess_mimax_scaler(y_train, y_val)
+        X_train, X_val = preprocess_standard_scaler(X_train, X_val)
+        X_train, X_val = decomposition_PCA(X_train, X_val, tuning_params=tuning_params_dict)
 
         # call training model over each fold
         try:
@@ -267,11 +300,11 @@ def tuning_MLP(datapath, X, y):
     overall_results = {}
 
     # create an optuna tuning object, num trials default = 20
-    num_trials = 120
+    num_trials = 100
     study = optuna.create_study(
         direction ="minimize",
         sampler=optuna.samplers.TPESampler(seed=42),
-        pruner=optuna.pruners.PercentilePruner(percentile=80, n_min_trials=20)
+        pruner=optuna.pruners.PercentilePruner(percentile=65, n_min_trials=25)
     )
     
     # searching loop with objective tuning
@@ -302,5 +335,10 @@ def tuning_MLP(datapath, X, y):
 
     with open(f"./tuning_mlp_num_trials_" + str(num_trials) + ".json", 'w') as fp:
         json.dump(best_params, fp)
+
+    fig1 = optuna.visualization.plot_optimization_history(study)
+    fig2 = optuna.visualization.plot_intermediate_values(study)
+    fig1.show()
+    fig2.show()
 
     return overall_results
