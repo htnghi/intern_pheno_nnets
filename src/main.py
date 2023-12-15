@@ -7,6 +7,7 @@ from models.RNN import *
 from models.MLP import *
 from models.CNN import *
 from tuning.trial_tuning_CNN import *
+from tuning.trial_tuning_RNN import *
 from tuning.trial_tuning_MLP import *
 from preprocess.encode_data import *
 
@@ -56,11 +57,14 @@ if __name__ == '__main__':
 
     # model = run_train_MLP(datapath, X1_train, y1_train, X1_test, y1_test)
 
-    # model = trial_train_and_tune_CNN(datapath, X1_train, y1_train)
+    model = tuning_CNN(datapath, X1_train, y1_train)
     
-    # model = trial_train_and_tune_MLP(datapath, X1_train, y1_train)
+    # model = tuning_MLP(datapath, X1_train, y1_train)
 
-    model = run_train_RNN(datapath, X1_train, y1_train, X1_test, y1_test)
+    # model = run_train_RNN(datapath, X1_train, y1_train, X1_test, y1_test)
+
+    # model = trial_train_and_tune_RNN(datapath, X1_train, y1_train)
+
 
 
 
