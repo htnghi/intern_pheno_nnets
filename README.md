@@ -17,7 +17,23 @@ So far, have done the implementation of MLP, CNN with Pytorch from scratch; wher
 * Model snippet code:
 
 ```python
+# Get output after LSTM layer
+class Output_lstm(torch.nn.Module):
+    def __init__(self):
+        super(Output_lstm, self).__init__()
 
+    def forward(self, x):
+        lstm_out, (hn, cn) = x
+        return lstm_out
+# Reshape data before going to linear layer
+class Reshape_to_linear(torch.nn.Module):
+    def __init__(self):
+        super(Reshape_to_linear, self).__init__()
+
+    def forward(self, lstm_out):
+        return lstm_out[:, -1, :]
+        
+def RNN(tuned_params):
     layers = []
     n_feature = 4 # for onehot
     if tuning_params['n_layers'] > 1:
@@ -35,10 +51,8 @@ So far, have done the implementation of MLP, CNN with Pytorch from scratch; wher
 ```
 
 * Observation:
-    + RNN is very bad at the moment with the current one-hot encoding. Maybe we need another way of encoding for this model.
-    + Another thing is training. Training RNN is too slow. Not sure, if we reduce the dimention of data, we can run RNN faster or not. I did an investigation, there are some other ways of dimention reduction, such as UPMA, ...
-    + I have asked a friend for an account at LRZ :). He's working there, and gives me an account to run on some servers there.
-
+    + RNN is very bad at the moment with the current one-hot encoding => need another way of encoding for this model.
+    + Training RNN is too slow => if we reduce the dimention of data, we can run RNN faster or not => such as UPMA, ...
 
 * Overview the current results with the best tuned parameters for each model
 
@@ -48,13 +62,13 @@ So far, have done the implementation of MLP, CNN with Pytorch from scratch; wher
 
 ### TODO
 
-* Complete the internship report and submit to ... (after holidays). At the moment, roughly done with the content, but I need to improve the text and structure it better.
-* Collect results
-* Try to check RNN and maybe improve it further if possible
+* Try to check RNN and maybe improve it further if possible - Collect results
+* Complete the internship report and submit to 8/1/2024 (after holidays). 
 
 ### Question
-* Tuning and optimizing models have to make a lot of effort, and I have a feeling the phenotype dataset itself doesn't have a good match or a good correlation between the input features and the labels. So, do we have an analysis method or technique to check whether a dataset can be good for training?
-* Or, somehow, with a few trials, we can know or can decide better: Should we go further in tuning the model or not?
+* The phenotype dataset itself doesn't have a good match or a good correlation between the input features and the labels => any analysis method or technique to check whether a dataset can be good for training?
+
+<!-- * Or, somehow, with a few trials, we can know or can decide better: Should we go further in tuning the model or not? -->
 
 
 
