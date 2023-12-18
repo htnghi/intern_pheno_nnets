@@ -17,7 +17,7 @@ So far, have done the implementation of MLP, CNN with Pytorch from scratch; wher
 * Model snippet code:
 
 ```python
-# Get output after LSTM layer
+# Get outputs after LSTM layer
 class Output_lstm(torch.nn.Module):
     def __init__(self):
         super(Output_lstm, self).__init__()
@@ -25,14 +25,14 @@ class Output_lstm(torch.nn.Module):
     def forward(self, x):
         lstm_out, (hn, cn) = x
         return lstm_out
-# Reshape data before going to linear layer
+# Reshaping the outputs such that it can be fit into the fully connected layer
 class Reshape_to_linear(torch.nn.Module):
     def __init__(self):
         super(Reshape_to_linear, self).__init__()
 
     def forward(self, lstm_out):
         return lstm_out[:, -1, :]
-        
+
 def RNN(tuned_params):
     layers = []
     n_feature = 4 # for onehot
