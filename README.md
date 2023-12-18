@@ -21,7 +21,6 @@ So far, have done the implementation of MLP, CNN with Pytorch from scratch; wher
 class Output_lstm(torch.nn.Module):
     def __init__(self):
         super(Output_lstm, self).__init__()
-
     def forward(self, x):
         lstm_out, (hn, cn) = x
         return lstm_out
@@ -29,7 +28,6 @@ class Output_lstm(torch.nn.Module):
 class Reshape_to_linear(torch.nn.Module):
     def __init__(self):
         super(Reshape_to_linear, self).__init__()
-
     def forward(self, lstm_out):
         return lstm_out[:, -1, :]
 
