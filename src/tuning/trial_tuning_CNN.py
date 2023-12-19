@@ -7,22 +7,16 @@ import sklearn
 import numpy as np
 import pandas as pd
 
-from pandas import read_csv
-
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import KFold
 
 from torch import optim
-
 from torch.nn import MaxPool1d, Conv1d
 from torch.nn import Sequential, MaxPool1d, Flatten, LeakyReLU, BatchNorm1d, Dropout, Linear, ReLU, Tanh
 
 from torch.optim import SGD, Adam
-
-from torch.utils.data import Dataset, TensorDataset
-from torch.utils.data import DataLoader, SubsetRandomSampler
-from torch.utils.data import random_split
+from torch.utils.data import DataLoader
 
 # ==============================================================
 # Utils/Help function
@@ -78,8 +72,6 @@ def CNN1D(optuna_trial, num_features, tuning_params):
     :param activation: type of activation functions
     :return: sequential multi layer perceptron model
     """
-
-    # print('DBG: num features of input dataset - {:4d}'.format(num_features))
 
     # for the first conv layer
     # in_filters = 1 # for additive encoding
@@ -199,8 +191,8 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
     early_stopping_point = None
 
     # training loop over epochs
-    num_epochs = training_params['n_epochs']
-    early_stop_patience = training_params['early_stop_patience']
+    num_epochs = training_params['num_epochs']
+    early_stop_patience = training_params['early_stop']
     for epoch in range(num_epochs):
         train_one_epoch(model, train_loader, loss_function, optimizer)
         val_loss = validate_one_epoch(model, val_loader, loss_function)
@@ -211,17 +203,9 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
         else:
             epochs_improvement += 1
         
-        print('Epoch ' + str(epoch) + ' of ' + str(num_epochs))
-        print('Current val_loss=' + str(val_loss) + ', best val_loss=' + str(best_loss))
-
-        # try to stop early
-        # if epoch >= 20 and epochs_improvement >= tuning_params['early_stop_patience']:
-        #     print("Early Stopping at epoch " + str(epoch))
-        #     early_stopping_point = epoch - tuning_params['early_stop_patience']
-        #     model = best_model
-        #     return predict(model, val_loader), early_stopping_point
+        print('Epoch {}/{}: current_loss={:.5f} | best_loss={:.5f}'.format(epoch, num_epochs, val_loss, best_loss))
         
-        if epoch >= 25 and epochs_improvement >= early_stop_patience:
+        if epoch >= 20 and epochs_improvement >= early_stop_patience:
             print("Early Stopping at epoch " + str(epoch))
             early_stopping_point = epoch - early_stop_patience
             model = best_model
@@ -232,14 +216,7 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
 # ==============================================================
 # Define objective function for tuning hyperparameters
 # ==============================================================
-def objective(trial, X, y):
-
-    # for extracting related parameters of training
-    training_params_dict = {}
-    training_params_dict['batch_size'] = 32
-    training_params_dict['n_epochs']   = 200
-    training_params_dict['width_onehot'] = 4
-    training_params_dict['early_stop_patience'] = 25
+def objective(trial, X, y, data_variants, training_params_dict):
 
     # for tuning parameters
     tuning_params_dict = {
@@ -252,9 +229,8 @@ def objective(trial, X, y):
         'factor_out_linear_features': trial.suggest_float('factor_out_linear_features', 0.2, 1, step=0.1),
         'activation1': trial.suggest_categorical('activation1', ['ReLU', 'LeakyReLU', 'Tanh']),
         'activation2': trial.suggest_categorical('activation2', ['ReLU', 'LeakyReLU', 'Tanh']),
-        'dropout': trial.suggest_float('dropout', 0.1, 0.5, step=0.05),
-        # 'early_stop_patience': trial.suggest_int("early_stop_patience", 0, 6, step=2),
-        'pca': trial.suggest_float('pca', 0.7, 0.95, step=0.05)
+        'dropout': trial.suggest_float('dropout', 0.1, 0.5, step=0.05)
+        # 'pca': trial.suggest_float('pca', 0.7, 0.95, step=0.05)
     }
 
     # log early stopping point at each fold
@@ -269,11 +245,14 @@ def objective(trial, X, y):
         raise optuna.exceptions.TrialPruned()
     
     # iterate for training and tuning
+    print('\n----------------------------------------------')
     print("Params for Trial " + str(trial.number))
     print(trial.params)
+    print('----------------------------------------------')
 
     # tracking the results
-    objective_values = []
+    first_obj_values = []
+    second_obj_values = []
 
     # forl cross-validation kfolds, default = 5 folds
     kfold = KFold(n_splits=5, shuffle=True)
@@ -282,10 +261,10 @@ def objective(trial, X, y):
     for fold, (train_ids, val_ids) in enumerate(kfold.split(X, y)):
 
         # prepare data for training and validating in each fold
-        print('Fold {}: len(train_ids)={:5d}, len(val_ids)={:5d}'.format(fold, len(train_ids), len(val_ids)))
+        print('Fold {}: num_train_ids={}, num_val_ids={}'.format(fold, len(train_ids), len(val_ids)))
         X_train, y_train, X_val, y_val = X[train_ids], y[train_ids], X[val_ids], y[val_ids]
 
-        # Preprocessing data
+        # preprocessing data
         y_train, y_val = preprocess_mimax_scaler(y_train, y_val)
         # X_train, X_val = preprocess_standard_scaler(X_train, X_val)
         # X_train, X_val = decomposition_PCA(X_train, X_val, tuning_params=tuning_params_dict)
@@ -299,18 +278,21 @@ def objective(trial, X, y):
             if stopping_point is not None:
                 early_stopping_points.append(stopping_point)
             else:
-                early_stopping_points.append(training_params_dict['n_epochs'])
+                early_stopping_points.append(training_params_dict['num_epochs'])
             
             # calculate objective value
-            obj_value = sklearn.metrics.mean_squared_error(y_true=y_val, y_pred=y_pred)
+            obj_value1 = sklearn.metrics.mean_squared_error(y_true=y_val, y_pred=y_pred)
+            obj_value2 = sklearn.metrics.explained_variance_score(y_true=y_val, y_pred=y_pred)
+            print('      explained_var={:.5f} | mse_loss={:.5f}'.format(obj_value2, obj_value1))
 
             # report pruned values
-            trial.report(value=obj_value, step=fold)
+            trial.report(value=obj_value2, step=fold)
             if trial.should_prune():
                 raise optuna.exceptions.TrialPruned()
             
             # accumulate the obj val losses
-            objective_values.append(obj_value)
+            first_obj_values.append(obj_value1)
+            second_obj_values.append(obj_value2)
 
         # for pruning the tuning process
         except (RuntimeError, TypeError, ValueError) as exc:
@@ -322,37 +304,36 @@ def objective(trial, X, y):
             raise optuna.exceptions.TrialPruned()
     
     # return the average val loss
-    current_val_result = float(np.mean(objective_values))
+    current_val_loss = float(np.mean(first_obj_values))
+    current_val_expv = float(np.mean(second_obj_values))
 
     # Average value of early stopping points of all innerfolds for refitting of final model
     early_stopping_point = int(np.mean(early_stopping_points))
-    print("Average early_stopping_point:", early_stopping_point)
-
-
+    print('----------------------------------------------')
+    print("Average early_stopping_point: {}| avg_exp_var={:.5f}| avg_loss={:.5f}".format(early_stopping_point, current_val_expv, current_val_loss))
     print('----------------------------------------------\n')
 
-    return current_val_result
+    return current_val_expv
 
 # ==============================================================
 # Call tuning function
 # ==============================================================
-def tuning_CNN(datapath, X, y):
+def tuning_CNN(datapath, X, y, data_variants, training_params_dict):
 
     # for tracking the best validation result
     best_val_result = None
     overall_results = {}
 
     # create an optuna tuning object, num trials default = 20
-    num_trials = 100
+    num_trials = training_params_dict['num_trials']
     study = optuna.create_study(
-        direction ="minimize",
-        sampler=optuna.samplers.TPESampler(seed=42),
-        pruner=optuna.pruners.PercentilePruner(percentile=65, n_min_trials=25)
+        direction ="maximize",
+        sampler=optuna.samplers.TPESampler(seed=training_params_dict['optunaseed']),
+        pruner=optuna.pruners.PercentilePruner(percentile=training_params_dict['percentile'], n_min_trials=training_params_dict['min_trials'])
     )
     
     # searching loop with objective tuning
-    study.optimize(lambda trial: objective(trial, X, y), n_trials=num_trials)
-
+    study.optimize(lambda trial: objective(trial, X, y, data_variants, training_params_dict), n_trials=num_trials)
 
     # print statistics after tuning
     print("Optuna study finished, study statistics:")
@@ -370,23 +351,22 @@ def tuning_CNN(datapath, X, y):
     best_params = study.best_trial.params
     overall_results[key] = {'best_params': best_params}
 
-    
-    # model_params = study.best_trial.params
-    # model_params['optuna_best_trial_number'] =  study.best_trial.number 
-    # model_params['optuna_best_trial_value'] = float(np.round(study.best_value, 6))
-    # model_params["n_trials"] = num_trials
-
-    with open(f"./tuning_mlp_num_trials_" + str(num_trials) + ".json", 'w') as fp:
+    # record best parameters to file
+    minmax = '_minmax' if data_variants[0] == True else ''
+    standard = '_strandard' if data_variants[1] == True else ''
+    pcafitting = '_pcafitting' if data_variants[2] == True else ''
+    pheno = str(data_variants[3])
+    with open(f"./tuned_cnn_" + "pheno" + pheno + minmax + standard + pcafitting + ".json", 'w') as fp:
         json.dump(best_params, fp)
 
-    fig1 = optuna.visualization.plot_optimization_history(study)
-    fig2 = optuna.visualization.plot_intermediate_values(study)
-    fig1.show()
-    fig2.show()
+    fig_optim_history = optuna.visualization.plot_optimization_history(study)
+    fig_inter_values = optuna.visualization.plot_intermediate_values(study)
+    fig_optim_history.write_image("./optimhisto_cnn_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
+    fig_inter_values.write_image("./intervalue_cnn_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
+    # fig_optim_history.show()
+    # fig_inter_values.show()
 
     return overall_results
-
-
 
 
 

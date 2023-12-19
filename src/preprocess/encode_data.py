@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+
 import torch
 from torch.nn.functional import one_hot
 
@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 # -------------------------------------------------------------
 #  One_hot encoding
 # -------------------------------------------------------------
-def get_onehot_encoding(X: np.array) -> np.array:
+def get_onehot_encoding(X: np.array):
     """
     Genotype matrix is homozygous => create 3d torch tensor with (samples, SNPs, 4), with 4 as the onehot encoding
     - A : [1,0,0,0]
@@ -19,10 +19,12 @@ def get_onehot_encoding(X: np.array) -> np.array:
     - G : [0,0,1,0]
     - T : [0,0,0,1]
     """
+
     unique, inverse = np.unique(X, return_inverse=True)
     inverse = inverse.reshape(X.shape)
     X_onehot = one_hot(torch.from_numpy(inverse)).numpy()
     return X_onehot
+
 
 def read_data_pheno_onehot(datapath, type):
     """
@@ -59,16 +61,11 @@ def read_data_pheno_onehot(datapath, type):
     X = df_genotypes.iloc[:,1:df_genotypes.shape[1]-1]
     y = df_genotypes[['sample_ids', 'pheno'+str(type)]]
 
-    # print('------------------------------------------------------------------')
-    # print(X.iloc[:,1:])
-
-
     # convert new dataset to csv
-    # print('------------------------------------------------------------------')
-    # print('Convert original X y to new X y to csv files: ')
     X.to_csv(datapath + '/data/pheno' + str(type) + '/x_matrix_onehot.csv')
     y.to_csv(datapath + '/data/pheno' + str(type) + '/y_matrix_onehot.csv')
     # print('------------------------------------------------------------------\n')
+
 
 def split_train_test_data_onehot(datapath, type):
     """
@@ -76,6 +73,7 @@ def split_train_test_data_onehot(datapath, type):
         + in: path to X and y
         + out: the X and y as type numpy array
     """
+    
     X = pd.read_csv(datapath + '/data/pheno' + str(type) + '/x_matrix_onehot.csv')
     y = pd.read_csv(datapath + '/data/pheno' + str(type) + '/y_matrix_onehot.csv')
 
@@ -88,6 +86,7 @@ def split_train_test_data_onehot(datapath, type):
     y_train.to_csv(datapath + '/data/pheno' + str(type) + '/y_train_onehot.csv')
     X_test.to_csv(datapath + '/data/pheno' + str(type) + '/x_test_onehot.csv')
     y_test.to_csv(datapath + '/data/pheno' + str(type) + '/y_test_onehot.csv')
+
 
 def load_split_train_test_onehot(datapath, type):
 
@@ -144,15 +143,7 @@ def read_data_pheno_additive(datapath, type):
     X = df_genotypes.iloc[:,1:df_genotypes.shape[1]-1]
     y = df_genotypes[['sample_ids', 'pheno'+str(type)]]
 
-    # print('------------------------------------------------------------------')
-    # print(X.iloc[:,1:].to_numpy())
-    # print(y['pheno'+str(type)].to_numpy())
-    # print(y.shape) #(1000,2) for pheno2
-    # print('------------------------------------------------------------------\n')
-
     # convert new dataset to csv
-    # print('------------------------------------------------------------------')
-    # print('Convert original X y to new X y to csv files: ')
     X.to_csv(datapath + '/data/pheno' + str(type) + '/x_matrix_additive.csv')
     y.to_csv(datapath + '/data/pheno' + str(type) + '/y_matrix_additive.csv')
     # print('------------------------------------------------------------------\n')
@@ -168,7 +159,6 @@ def split_train_test_data_additive(datapath, type):
 
     X_nparray = X.iloc[:,2:]
     y_nparray = y.iloc[:,2]
-    # print(X_nparray. shape, y_nparray.shape) #(1000, 10000) (1000,)
 
     X_train, X_test, y_train, y_test = train_test_split(X_nparray, y_nparray, train_size=0.9, shuffle=True)
     X_train.to_csv(datapath + '/data/pheno' + str(type) + '/x_train_additive.csv')

@@ -1,289 +1,187 @@
 import numpy as np
-from numpy import vstack
-from pandas import read_csv
-import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
-from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, average_precision_score
-from sklearn.metrics import confusion_matrix, recall_score, f1_score
-from sklearn.metrics import explained_variance_score, r2_score, mean_squared_error, mean_absolute_error
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import KFold
+
 from sklearn.decomposition import PCA
-from torch.utils.data import Dataset, TensorDataset
-from torch.utils.data import DataLoader, SubsetRandomSampler
-from torch.utils.data import random_split
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.metrics import explained_variance_score, r2_score, mean_squared_error, mean_absolute_error
+
+import pickle as pk
 import torch
-from torch import nn
-from torch import Tensor
-from torch.nn import Linear
-from torch.nn import ReLU, Softplus
-from torch.nn import Sigmoid
-from torch.nn import Module, Sequential
-from torch.nn import MaxPool1d, Conv1d, Flatten, LeakyReLU, BatchNorm1d, Dropout, Tanh
-from torch.optim import SGD, Adam, RMSprop
-from torch.nn import MSELoss
-from torch.nn.init import kaiming_uniform_
-from torch.nn.init import xavier_uniform_
-import time
-import copy
-import math
 
+from torch import optim
+from torch.nn import LSTM, Linear
+from torch.nn import ReLU, LeakyReLU, Tanh, Dropout 
+from torch.optim import SGD, Adam
+from torch.utils.data import DataLoader
 
-# -------------------------------------------------------------
-# 1. Build CNN Model
-# -------------------------------------------------------------
-class RNN(nn.Module):
-    
-    def __init__(self, input_size, hidden_size, num_layers, num_classes):
-        super(RNN, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, num_classes)
-    
-    def forward(self, x):
-        # Set initial hidden and cell states 
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size)
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size)
+# ==============================================================
+# Utils/Help function
+# ==============================================================
 
-        # Passing in the input and hidden state into the model and  obtaining outputs
-        out, hidden = self.lstm(x, (h0, c0))  
-        # print('Shape of out',out.shape)    #torch.Size([50, 10000, 128]) #(batch_size, seq_length, hidden_size)
-  
-        #Reshaping the outputs such that it can be fit into the fully connected layer
-        out = self.fc(out[:, -1, :])    
-        # print('Shape of out after reshaping',out.shape) #torch.Size([50, 1]) #(batch_size, class_num)
+def get_activation_func(name):
+    if name == 'ReLU':
+        act_func = ReLU()
+    elif name == 'LeakyReLU' :
+        act_func = LeakyReLU()
+    else:
+        act_func = Tanh()
+    return act_func
 
-        return out 
-
-# -------------------------------------------------------------
-# 2. The trainning loop and function validation
-# -------------------------------------------------------------
-def train_each_epoch(train_loader, model, criterion, optimizer, train_loss, train_loss_total):
-
-    # training loop with train_loader --------------------------------------------
-    for i, (inputs, targets) in enumerate(train_loader):
-        # call model train
-        model.train()
-        # get predicted outputs
-        pred_outputs = model(inputs)
-        # calculate loss
-        loss_training = criterion(pred_outputs, targets)
-        # optimizer sets to 0 gradients
-        optimizer.zero_grad()
-        # set the loss to back propagate through the network updating the weights
-        loss_training.backward()
-        # perform optimizer step
-        optimizer.step()  
-
-        # Sum up mse loss and r2, expVar, mae 
-        train_loss += loss_training.item()
-    
-    # Mean validating loss and other metrics for each epoch
-    train_loss_avg = train_loss/len(train_loader)
-    print('\t \t Training - Average: loss = {:.3f}'.format(train_loss_avg))
-
-    # storing total loss and metris
-    train_loss_total.append(train_loss_avg)
-
-    return model, train_loss_total
-
-
-def validation_each_epoch(model, val_loader, criterion, val_loss, val_loss_total):
-
-    model.eval()
-    with torch.no_grad():
-        for i, (inputs, targets) in enumerate(val_loader):
-            yhat = model(inputs)
-            loss_validation = criterion(yhat, targets)
-            
-            # Sum up loss
-            val_loss += loss_validation.item()
-
-    # Mean validating loss for each epoch
-    val_loss_avg = val_loss/len(val_loader)
-    print('\t \t Validation - Average: loss = {:.3f}'.format(val_loss_avg))
-
-    # storing total loss and metris
-    val_loss_total.append(val_loss_avg)
-
-    return val_loss_avg, val_loss_total
-
-
-def train_model(num_epochs, X, y, k_folds, batch_size, learning_rate, momentum):
-
-    # number of folds for cross-validation
-    kfold = KFold(n_splits=k_folds, shuffle=True)
-    
-    # declare arrays for storing total loss and other metrics
-    train_loss_total = []
-    val_loss_total = []
-
-    # define for holding the best model
-    best_loss = np.inf
-    best_weights = None
-    best_epoch = 0
-    best_fold  = 0
-    
-    for fold, (train_ids, val_ids) in enumerate(kfold.split(X, y)):
-        print('FOLD {}: len(train)={}, len(val)={}'.format(fold+1, len(train_ids), len(val_ids)))
-
-        # extract X, y for training and validating
-        X_train, y_train = X[train_ids], y[train_ids]
-        X_val, y_val = X[val_ids], y[val_ids]
-
-        # MinMax Scaler
-        minmax_scaler = MinMaxScaler()
-        y_train = np.expand_dims(y_train, axis=1)
-        y_train_scaled = minmax_scaler.fit_transform(y_train)
-        y_val = np.expand_dims(y_val, axis=1)
-        y_val_scaled = minmax_scaler.fit_transform(y_val)
-
-        # Normalize dataset using StandardScaler
-        # standard_scaler = StandardScaler()
-        # standard_scaler.fit(X_train)
-        # X_train = standard_scaler.transform(X_train)
-        # X_val = standard_scaler.transform(X_val)
-
-        # PCA
-        # pca = PCA(n_components=218)
-        # pca.fit(X_train)
-        # X_train = pca.transform(X_train)
-        # X_val = pca.transform(X_val)
-        # pk.dump(pca, open('./pca.pkl', 'wb'))
-        # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
-
-        # Define relevant hyperparameter for the RNN task
-        # n_inputs = 1 # for additive encoding
-        sequence_length = np.size(X_train, 1) # len of column
-        input_size = 4 #for onehot
-        hidden_size = 128
-        num_layers = 3
-        num_classes = 1
-
-        # transform to tensor 
-        tensor_X_train, tensor_y_train = to_tensor(X_train, y_train_scaled)
-        tensor_X_val, tensor_y_val = to_tensor(X_val, y_val_scaled)
-        
-        # tensor_X_train, tensor_X_val = tensor_X_train.unsqueeze(1), tensor_X_val.unsqueeze(1) # for additive encoding
-        # tensor_X_train, tensor_X_val = torch.swapaxes(tensor_X_train, 1, 2), torch.swapaxes(tensor_X_val, 1, 2) #for onehot
-        
-        # Define data loaders for training and testing data in this fold
-        train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=batch_size, shuffle=True)  
-
-        # Call model
-        model = RNN(input_size, hidden_size, num_layers, num_classes)
-
-        # define loss function and optimizer
-        criterion = MSELoss()   
-        optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=momentum)  
-
-        for epoch in range(num_epochs):
-            print ('\t Epoch [{}/{}]: Batch size(train)={}, Batch size(val)={}'.format(epoch+1, num_epochs, batch_size, batch_size))
-
-            # delcare some arrays for storing the sum values of MSE
-            train_loss = 0.0
-            val_loss = 0.0
-
-            # training loop with train_loader --------------------------------------------
-            model, train_loss_total = train_each_epoch(train_loader, model, criterion, optimizer, train_loss, train_loss_total)
-
-            # Validate with val_loader -------------------------------------------------
-            val_loss_avg, val_loss_total = validation_each_epoch(model, val_loader, criterion, val_loss, val_loss_total)
-        
-            # hold the best loss (also the best model)
-            if val_loss_avg < best_loss:
-                best_fold = fold+1
-                best_epoch = epoch+1
-                best_loss = val_loss_avg
-                best_weights = copy.deepcopy(model.state_dict())
-
-        # restore model
-        model.load_state_dict(best_weights)
-    print('Best loss_MSE={:.4f} at fold {} and epoch {}'.format(best_loss, best_fold, best_epoch))
-    print('-----------------------------------------------\n')       
-
-    return model, train_loss_total, val_loss_total
-
-# -------------------------------------------------------------
-# 3. Functions for preprocessing
-# -------------------------------------------------------------
-# Min Max Scaler
-def minmax_scaler(y):
+# minMax Scaler
+def preprocess_mimax_scaler(y_train, y_val):
     minmax_scaler = MinMaxScaler()
-    y = np.expand_dims(y, axis=1)
-    y_scaled = minmax_scaler.fit_transform(y)
-    return  y_scaled
+    y_train = np.expand_dims(y_train, axis=1)
+    y_val = np.expand_dims(y_val, axis=1)
+    y_train_scaled = minmax_scaler.fit_transform(y_train)
+    y_val_scaled   = minmax_scaler.transform(y_val)
+    return y_train_scaled, y_val_scaled
 
-# transform dataset to Tensor
-def to_tensor(X, y):
-    tensor_X = torch.Tensor(X)
-    tensor_y = torch.Tensor(y)
-    return tensor_X, tensor_y
+# normalize dataset using StandardScaler
+def preprocess_standard_scaler(X_train, X_val):
+    standard_scaler = StandardScaler()
+    standard_scaler.fit(X_train)
+    X_train_scaled = standard_scaler.transform(X_train)
+    X_val_scaled   = standard_scaler.transform(X_val)
+    return X_train_scaled, X_val_scaled
 
-# ==============================================================
-# Call and train model
-# ==============================================================
-def run_train_RNN(datapath, X_train, y_train, X_test, y_test):
+# Decomposition PCA
+def decomposition_PCA(X_train, X_val, tuning_params):
+    pca = PCA(tuning_params['pca'])
+    pca.fit(X_train)
+    X_train_scaled = pca.transform(X_train)
+    X_val_scaled = pca.transform(X_val)
+    # pk.dump(pca, open('./pca.pkl', 'wb'))
+    # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
+    return X_train_scaled, X_val_scaled
 
-    # Define relevant hyperparameter for general DL task
-    batch_size = 50
-    num_epochs = 5
-    k_folds = 5
-    learning_rate = 0.0025000721669496077
-    momentum = 0.006585441923995726
+# Get output after LSTM layer
+class Output_lstm(torch.nn.Module):
+    def __init__(self):
+        super(Output_lstm, self).__init__()
 
+    def forward(self, x):
+        lstm_out, (hn, cn) = x
+        return lstm_out
+
+# Reshape data before going to linear layer
+class Reshape_to_linear(torch.nn.Module):
+    def __init__(self):
+        super(Reshape_to_linear, self).__init__()
+
+    def forward(self, lstm_out):
+        return lstm_out[:, -1, :]
     
-    # Get dataset
-    # tensor_X, tensor_y = to_tensor(X_train, y_train)
-   
-    # # Call model
-    # model = CNN1D(n_inputs)
+# ==============================================================
+# Define CNN Model
+# ==============================================================
+def RNN(tuned_params):
+    """
+    Generate sequential network model with optuna optimization.
 
-    # Training model
-    trained_model = train_model(num_epochs, X_train, y_train, k_folds, batch_size, learning_rate, momentum)
+    :param optuna_trial: optuna trial class with other tunning parameters
+    :param n_layers: num of rnn hidden layers
+    :param hidden_size: the size of hidden state
+    :param dropout: perc of final layer dropout
+    :return: sequential multi layer perceptron model
+    """
+    
+    layers = []
+    n_feature = 4 # for onehot
+    if tuned_params['n_layers'] > 1:
+        layers.append(LSTM(input_size=n_feature, hidden_size=tuned_params['hidden_size'],
+                                num_layers=tuned_params['n_layers'], dropout=tuned_params['dropout']))
+    else:
+        layers.append(LSTM(input_size=n_feature, hidden_size=tuned_params['hidden_size'],
+                                num_layers=tuned_params['n_layers']))
+    
+    layers.append(Output_lstm())
+    layers.append(Reshape_to_linear())
+    layers.append(Dropout(tuned_params['dropout']))
+    layers.append(Linear(in_features=tuned_params['hidden_size'], out_features=1))
 
-    # Get model
-    # specify the zeroth index for the return of model
-    model = trained_model[0]
+    return torch.nn.Sequential(*layers)
+
+# =============================================================
+# Call and train model 
+# =============================================================
+
+def train_each_epoch(model, train_loader, loss_function, optimizer, device):
+    sum_loss = 0.0
+    model.train()
+    for i, (inputs, targets) in enumerate(train_loader):
+        inputs, targets = inputs.to(device), targets.to(device)
+        pred_outputs = model(inputs)
+        targets = targets.reshape((targets.shape[0], 1))
+        loss = loss_function(pred_outputs, targets)
+        sum_loss += loss.item()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    return sum_loss / len(train_loader.dataset)
+
+def train_loop(X_train, y_train, hyperparameters, device):
+
+    # extract training and tuned parameters
+    batch_size = 32
+    num_epochs = hyperparameters['avg_epochs']
+    learning_rate = hyperparameters['learning_rate']
+    momentum = hyperparameters['weight_decay']
+    optimizer_type = hyperparameters['optimizer']
+
+    # transform to tensor 
+    tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train)
+    tensor_y_train = tensor_y_train.view(len(y_train),1)
+    
+    # define data loaders for training
+    train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True) 
+
+    # create and init the model
+    model = RNN(hyperparameters)
+    model.to(device)
+
+    # define loss function
+    loss_function = torch.nn.MSELoss() 
+
+    for epoch in range(num_epochs):
+        optimizer = getattr(optim, optimizer_type)(model.parameters(), lr=learning_rate, weight_decay=momentum)
+        avg_loss = train_each_epoch(model, train_loader, loss_function, optimizer, device)
+        print ('Epoch {}/{}: avg_loss={:.5f}'.format(epoch, num_epochs, avg_loss))
+    return model
+
+def run_train_RNN(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants, device):
+
+    # preprocessing data
+    y_train, y_test = preprocess_mimax_scaler(y_train, y_test)
+    
+    # training model
+    trained_model = train_loop(X_train, y_train, hyperparameters, device)
 
     # save the trained model
-    # torch.save(model, datapath + '/utils/save_MLP.model')
+    # print("Saving the trained RNN model at " + "/utils/tuned_RNN.model")
+    # torch.save(model, datapath + '/utils/tuned_RNN.model')
 
-     # load the trained model
-    # print("Loading the trained CNN model ...\n")
-    # model = torch.load('datapath + '/utils/save_MLP.model')
+    # load the trained model
+    # print("Loading the trained RNN model at " + "/utils/tuned_RNN.model")
+    # model = torch.load('datapath + '/utils/tuned_RNN.model')
 
-    # Get train loss and val loss for plotting
-    # train_loss = trained_model[1]
-    # val_loss = trained_model[2]
-    # print('Values of training loss: ', train_loss)
-    # print('Values of validating loss: ', val_loss)
-
-    # -------------------------------------------------------------
-    # Evaluate model by test dataset
-    # standard_scaler = StandardScaler()
-    # X_test = standard_scaler.fit_transform(X_test)
-    
-    # pca_reloaded = pk.load(open('pca.pkl', 'rb'))
+    # ---------------------------------------------
+    # Test the trained model with test dataset
+    # ---------------------------------------------
+    # pca_reloaded = pk.load(open('./pca.pkl', 'rb'))
     # X_test = pca_reloaded.transform(X_test)
     tensor_X_test = torch.Tensor(X_test)
+    tensor_X_test = tensor_X_test.to(device)
 
-    # Encoding
-    # tensor_X_test = tensor_X_test.unsqueeze(1) # only for additive encoding
-    # tensor_X_test = torch.swapaxes(tensor_X_test, 1, 2) #for onehot
-
-    y_test = minmax_scaler(y_test)
-
-    model.eval()
+    trained_model.eval()
     with torch.no_grad():
-        y_preds = model(tensor_X_test)
-
-        # change to numpy for calculating metrics in scikit learn library
-        y_preds = y_preds.detach().squeeze().numpy()
-        y_test  = y_test.squeeze()
+        
+        y_preds = trained_model(tensor_X_test)
+        
+        if device == torch.device('cpu'):
+            y_preds = y_preds.detach().squeeze().numpy()
+        else:
+            y_preds = y_preds.cpu().detach().squeeze().numpy()
 
         # collect mse, r2, explained variance
         test_mse = mean_squared_error(y_test, y_preds)
@@ -291,27 +189,27 @@ def run_train_RNN(datapath, X_train, y_train, X_test, y_test):
         test_r2 = r2_score(y_test, y_preds)
         test_mae = mean_absolute_error(y_test, y_preds)
 
-        print('\t \t Test - Average:   loss = {:.4f}, ExpVar = {:.4f}, R2 = {:.4f}, MAE = {:.4f}'.format(test_mse, test_exp_variance, test_r2, test_mae))
+        print('--------------------------------------------------------------')
+        print('Test results: avg_loss={:.4f}, avg_expvar={:.4f}, avg_r2score={:.4f}, avg_mae={:.4f}'.format(test_mse, test_exp_variance, test_r2, test_mae))
+        print('--------------------------------------------------------------')
 
-    # Plot the model
+    # plot the model
     x_plot = np.arange(len(y_preds))
     plt.scatter(x_plot, y_test, alpha=0.5, label='ground_true')
     plt.plot(x_plot, y_preds, label='prediction', color='r')
-
     plt.xlabel('Samples', fontsize=13)
-    plt.ylabel('Pheno1 (g)', fontsize=13)
+    plt.ylabel('Phenotype (g)', fontsize=13)
     plt.grid()
     plt.legend()
-    plt.savefig(datapath + '/utils/MLP_preds_groundtrue.svg', bbox_inches='tight')
-    plt.show()
- 
+    # plt.show()
+    
+    # save to file
+    minmax = '_minmax' if data_variants[0] == True else ''
+    standard = '_strandard' if data_variants[1] == True else ''
+    pcafitting = '_pcafitting' if data_variants[2] == True else ''
+    pheno = str(data_variants[3])
+    figurename = datapath + '/test_rnn_pheno' + pheno + minmax + standard + pcafitting + '.svg'
+    plt.savefig(figurename, bbox_inches='tight')
+    print('Saved the figure: ', figurename)
 
-    return model
-
-
- 
-
-
-
-
-
+    return trained_model
