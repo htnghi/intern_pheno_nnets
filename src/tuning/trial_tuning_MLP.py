@@ -190,7 +190,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
         'learning_rate': trial.suggest_float('learning_rate', 1e-6, 1e-2), 
         'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
         'weight_decay': trial.suggest_float('weight_decay', 1e-10, 1e-2),
-        'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.03, 0.42, step=0.01),
+        'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.005, 0.3, step=0.001),
         'activation': trial.suggest_categorical('activation', ['LeakyReLU', 'ReLU', 'Tanh']),
         'n_layers': trial.suggest_int("n_layers", 1, 5),
         'dropout': trial.suggest_float('dropout', 0.1, 0.5, step=0.05),
