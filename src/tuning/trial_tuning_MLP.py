@@ -75,7 +75,7 @@ def MLP(optuna_trial, in_features, tuning_params):
     n_outputs = 1
     layers = []
     for i in range(tuning_params['n_layers']): 
-        out_features = optuna_trial.suggest_int("n_units_l{}".format(i), 33, 231)
+        out_features = optuna_trial.suggest_int("n_units_l{}".format(i), 30, 300)
         # out_features = int(in_features * tuning_params['initial_outfeatures_factor'])
         layers.append(Linear(in_features, out_features))
         act_layer = get_activation_func(tuning_params['activation'])
@@ -127,7 +127,10 @@ def predict(model, val_loader):
         for i, (inputs, targets) in enumerate(val_loader):
             inputs  = inputs.float()
             outputs = model(inputs)
+            # print('Target in predic function', targets)
+            # print('Outputs', outputs)
             predictions = torch.clone(outputs) if predictions is None else torch.cat((predictions, outputs))
+            # print('Predictions', predictions.shape)
     return predictions.detach().numpy()
 
 def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_val, y_val):
@@ -135,10 +138,10 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
     # transform data to tensor format
     tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train)
     tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val)
-
+    
     # define data loaders for training and testing data
     train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=training_params['batch_size'], shuffle=True)
-    val_loader   = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=training_params['batch_size'], shuffle=True)
+    val_loader   = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=training_params['batch_size'], shuffle=False)
 
     # define loss function and optimizer
     loss_function = torch.nn.MSELoss()
@@ -178,7 +181,7 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
     
     # return the best predicted values
     y_pred = predict(best_model, val_loader)
-    
+
     return y_pred, early_stopping_point
 
 # ==============================================================
@@ -191,7 +194,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
         'learning_rate': trial.suggest_float('learning_rate', 1e-6, 1e-2), 
         'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
         'weight_decay': trial.suggest_float('weight_decay', 1e-10, 1e-2),
-        # 'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.005, 0.3, step=0.001),
+        # 'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.05, 0.7, step=0.001),
         'activation': trial.suggest_categorical('activation', ['LeakyReLU', 'ReLU', 'Tanh']),
         'n_layers': trial.suggest_int("n_layers", 1, 5),
         'dropout': trial.suggest_float('dropout', 0.1, 0.5, step=0.05),
@@ -237,6 +240,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
         num_features = X_train.shape[1]
         try:
             model = MLP(trial, in_features=num_features, tuning_params=tuning_params_dict)
+    
         except Exception as err:
             print('Trial failed. Error in model creation, {}'.format(err))
             raise optuna.exceptions.TrialPruned()
@@ -283,6 +287,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
     early_stopping_point = int(np.mean(early_stopping_points))
     print('----------------------------------------------')
     print("Average early_stopping_point: {}| avg_exp_var={:.5f}| avg_loss={:.5f}".format(early_stopping_point, current_val_expv, current_val_loss))
+
     print('----------------------------------------------\n')
 
     return current_val_expv
