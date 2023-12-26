@@ -75,8 +75,8 @@ def MLP(optuna_trial, in_features, tuning_params):
     n_outputs = 1
     layers = []
     for i in range(tuning_params['n_layers']): 
-        out_features = optuna_trial.suggest_int("n_units_l{}".format(i), 30, 300)
-        # out_features = int(in_features * tuning_params['initial_outfeatures_factor'])
+        # out_features = optuna_trial.suggest_int("n_units_l{}".format(i), 30, 300)
+        out_features = int(in_features * tuning_params['initial_outfeatures_factor'])
         layers.append(Linear(in_features, out_features))
         act_layer = get_activation_func(tuning_params['activation'])
         layers.append(act_layer)   
@@ -194,7 +194,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
         'learning_rate': trial.suggest_float('learning_rate', 1e-6, 1e-2), 
         'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
         'weight_decay': trial.suggest_float('weight_decay', 1e-10, 1e-2),
-        # 'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.05, 0.7, step=0.001),
+        'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.05, 0.7, step=0.001),
         'activation': trial.suggest_categorical('activation', ['LeakyReLU', 'ReLU', 'Tanh']),
         'n_layers': trial.suggest_int("n_layers", 1, 5),
         'dropout': trial.suggest_float('dropout', 0.1, 0.5, step=0.05),
