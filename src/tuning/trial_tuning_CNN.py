@@ -233,12 +233,10 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
 # Define objective function for tuning hyperparameters
 # ==============================================================
 def objective(trial, X, y, data_variants, training_params_dict):
-    
-    set_seeds(seed=42)
 
     # for tuning parameters
     tuning_params_dict = {
-        'learning_rate': trial.suggest_float('learning_rate', 1e-6, 1e-2), 
+        'learning_rate': trial.suggest_categorical('learning_rate', [1e-5, 1e-4, 1e-3, 1e-2, 1e-1]), 
         'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
         'weight_decay': trial.suggest_float('weight_decay', 1e-10, 1e-2),
         'kernel_size': trial.suggest_int("kernel_size", 2, 8),
@@ -331,12 +329,14 @@ def objective(trial, X, y, data_variants, training_params_dict):
     print("Average early_stopping_point: {}| avg_exp_var={:.5f}| avg_loss={:.5f}".format(early_stopping_point, current_val_expv, current_val_loss))
     print('----------------------------------------------\n')
 
-    return current_val_expv
+    # return current_val_expv
+    return current_val_loss
 
 # ==============================================================
 # Call tuning function
 # ==============================================================
 def tuning_CNN(datapath, X, y, data_variants, training_params_dict):
+    set_seeds(seed=42)
 
     # for tracking the best validation result
     best_val_result = None
@@ -345,7 +345,7 @@ def tuning_CNN(datapath, X, y, data_variants, training_params_dict):
     # create an optuna tuning object, num trials default = 20
     num_trials = training_params_dict['num_trials']
     study = optuna.create_study(
-        direction ="maximize",
+        direction ="minimize",
         sampler=optuna.samplers.TPESampler(seed=training_params_dict['optunaseed']),
         pruner=optuna.pruners.PercentilePruner(percentile=training_params_dict['percentile'], n_min_trials=training_params_dict['min_trials'])
     )
