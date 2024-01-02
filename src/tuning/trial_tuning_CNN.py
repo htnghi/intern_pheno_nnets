@@ -18,6 +18,8 @@ from torch.nn import Sequential, MaxPool1d, Flatten, LeakyReLU, BatchNorm1d, Dro
 from torch.optim import SGD, Adam
 from torch.utils.data import DataLoader
 
+import random
+
 # ==============================================================
 # Utils/Help function
 # ==============================================================
@@ -57,6 +59,20 @@ def decomposition_PCA(X_train, X_val, tuning_params):
     # pk.dump(pca, open('./pca.pkl', 'wb'))
     # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
     return X_train_scaled, X_val_scaled
+
+def set_seeds(seed):
+    """
+    Set all seeds of libs with a specific function for reproducibility of results
+
+    :param seed: seed to use
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 # ==============================================================
 # Define CNN Model
@@ -217,6 +233,8 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
 # Define objective function for tuning hyperparameters
 # ==============================================================
 def objective(trial, X, y, data_variants, training_params_dict):
+    
+    set_seeds(seed=42)
 
     # for tuning parameters
     tuning_params_dict = {
@@ -334,6 +352,7 @@ def tuning_CNN(datapath, X, y, data_variants, training_params_dict):
     
     # searching loop with objective tuning
     study.optimize(lambda trial: objective(trial, X, y, data_variants, training_params_dict), n_trials=num_trials)
+    set_seeds(seed=42)
 
     # print statistics after tuning
     print("Optuna study finished, study statistics:")
