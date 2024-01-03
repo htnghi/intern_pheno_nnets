@@ -160,7 +160,7 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
 
     # define loss function and optimizer
     loss_function = torch.nn.MSELoss()
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=tuning_params['learning_rate'])
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=tuning_params['learning_rate'], weight_decay=tuning_params['weight_decay'])
     
     # track the best loss value and best model
     best_model = copy.deepcopy(model)
@@ -207,7 +207,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
     tuning_params_dict = {
         'learning_rate': trial.suggest_categorical('learning_rate', [1e-5, 1e-4, 1e-3, 1e-2, 1e-1]), 
         # 'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
-        # 'weight_decay': trial.suggest_float('weight_decay', 1e-10, 1e-2),
+        'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-2),
         'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.05, 0.7, step=0.001),
         'activation': trial.suggest_categorical('activation', ['LeakyReLU', 'ReLU', 'Tanh']),
         'n_layers': trial.suggest_int("n_layers", 1, 5),
@@ -346,16 +346,16 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict):
 
     # record best parameters to file
     minmax = '_minmax' if data_variants[0] == True else ''
-    standard = '_strandard' if data_variants[1] == True else ''
+    standard = '_standard' if data_variants[1] == True else ''
     pcafitting = '_pcafitting' if data_variants[2] == True else ''
     pheno = str(data_variants[3])
     with open(f"./tuned_mlp_" + "pheno" + pheno + minmax + standard + pcafitting + ".json", 'w') as fp:
         json.dump(best_params, fp)
 
-    fig_optim_history = optuna.visualization.plot_optimization_history(study)
-    fig_inter_values = optuna.visualization.plot_intermediate_values(study)
-    fig_optim_history.write_image("./optimhisto_mlp_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
-    fig_inter_values.write_image("./intervalue_mlp_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
+    # fig_optim_history = optuna.visualization.plot_optimization_history(study)
+    # fig_inter_values = optuna.visualization.plot_intermediate_values(study)
+    # fig_optim_history.write_image("./optimhisto_mlp_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
+    # fig_inter_values.write_image("./intervalue_mlp_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
     # fig_optim_history.show()
     # fig_inter_values.show()
 
