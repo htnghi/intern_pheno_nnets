@@ -195,8 +195,7 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
 
     # define loss function and optimizer
     loss_function = torch.nn.MSELoss()
-    optimizer = getattr(optim, tuning_params['optimizer'])(model.parameters(),
-                    lr=tuning_params['learning_rate'], weight_decay=tuning_params['weight_decay'])
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=tuning_params['learning_rate'], weight_decay=tuning_params['weight_decay'])
     
     # track the best loss value and best model
     best_model = copy.deepcopy(model)
@@ -237,8 +236,8 @@ def objective(trial, X, y, data_variants, training_params_dict):
     # for tuning parameters
     tuning_params_dict = {
         'learning_rate': trial.suggest_categorical('learning_rate', [1e-5, 1e-4, 1e-3, 1e-2, 1e-1]), 
-        'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
-        'weight_decay': trial.suggest_float('weight_decay', 1e-10, 1e-2),
+        # 'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
+        'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-2),
         'kernel_size': trial.suggest_int("kernel_size", 2, 8),
         'stride_percentage': trial.suggest_float('stride_percentage', 0.1, 1.0, step=0.1),
         'n_layers': trial.suggest_int("n_layers", 1, 4),
@@ -271,7 +270,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
     second_obj_values = []
 
     # forl cross-validation kfolds, default = 5 folds
-    kfold = KFold(n_splits=5, shuffle=True)
+    kfold = KFold(n_splits=5, shuffle=True, random_state=42)
 
      # main loop with cv-folding
     for fold, (train_ids, val_ids) in enumerate(kfold.split(X, y)):
@@ -302,7 +301,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
             print('      explained_var={:.5f} | mse_loss={:.5f}'.format(obj_value2, obj_value1))
 
             # report pruned values
-            trial.report(value=obj_value2, step=fold)
+            trial.report(value=obj_value1, step=fold)
             if trial.should_prune():
                 raise optuna.exceptions.TrialPruned()
             
@@ -336,6 +335,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
 # Call tuning function
 # ==============================================================
 def tuning_CNN(datapath, X, y, data_variants, training_params_dict):
+    
     set_seeds(seed=42)
 
     # for tracking the best validation result
@@ -352,7 +352,6 @@ def tuning_CNN(datapath, X, y, data_variants, training_params_dict):
     
     # searching loop with objective tuning
     study.optimize(lambda trial: objective(trial, X, y, data_variants, training_params_dict), n_trials=num_trials)
-    set_seeds(seed=42)
 
     # print statistics after tuning
     print("Optuna study finished, study statistics:")
@@ -378,15 +377,14 @@ def tuning_CNN(datapath, X, y, data_variants, training_params_dict):
     with open(f"./tuned_cnn_" + "pheno" + pheno + minmax + standard + pcafitting + ".json", 'w') as fp:
         json.dump(best_params, fp)
 
-    fig_optim_history = optuna.visualization.plot_optimization_history(study)
-    fig_inter_values = optuna.visualization.plot_intermediate_values(study)
-    fig_optim_history.write_image("./optimhisto_cnn_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
-    fig_inter_values.write_image("./intervalue_cnn_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
+    # fig_optim_history = optuna.visualization.plot_optimization_history(study)
+    # fig_inter_values = optuna.visualization.plot_intermediate_values(study)
+    # fig_optim_history.write_image("./optimhisto_cnn_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
+    # fig_inter_values.write_image("./intervalue_cnn_pheno" + pheno + minmax + standard + pcafitting + ".pdf")
     # fig_optim_history.show()
     # fig_inter_values.show()
 
     return overall_results
-
 
 
 
