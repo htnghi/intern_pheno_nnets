@@ -3,6 +3,7 @@ import copy
 import torch
 import optuna
 import sklearn
+import random
 
 import numpy as np
 import pandas as pd
@@ -56,6 +57,20 @@ def decomposition_PCA(X_train, X_val, tuning_params):
     # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
     return X_train_scaled, X_val_scaled
 
+def set_seeds(seed: int=42):
+    """
+    Set all seeds of libs with a specific function for reproducibility of results
+
+    :param seed: seed to use
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 # ==============================================================
 # Define MLP Model
 # ==============================================================
@@ -90,9 +105,9 @@ def MLP(optuna_trial, in_features, tuning_params):
 # Define training and validation loop
 # ==============================================================
 def train_one_epoch(model, train_loader, loss_function, optimizer):
-
+    
+    model.train()
     for i, (inputs, targets) in enumerate(train_loader):
-        model.train()
         pred_outputs = model(inputs)
         targets = targets.reshape((targets.shape[0], 1))
         loss_training = loss_function(pred_outputs, targets)
@@ -219,7 +234,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
     second_obj_values = []
 
     # forl cross-validation kfolds, default = 5 folds
-    kfold = KFold(n_splits=5, shuffle=True)
+    kfold = KFold(n_splits=5, shuffle=True, random_state=42)
 
      # main loop with cv-folding
     for fold, (train_ids, val_ids) in enumerate(kfold.split(X, y)):
@@ -262,7 +277,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
             print('      explained_var={:.5f} | mse_loss={:.5f}'.format(obj_value2, obj_value1))
 
             # report pruned values
-            trial.report(value=obj_value2, step=fold)
+            trial.report(value=obj_value1, step=fold)
             if trial.should_prune():
                 raise optuna.exceptions.TrialPruned()
             
@@ -290,12 +305,15 @@ def objective(trial, X, y, data_variants, training_params_dict):
 
     print('----------------------------------------------\n')
 
-    return current_val_expv
+    # return current_val_expv
+    return current_val_loss
 
 # ==============================================================
 # Call tuning function
 # ==============================================================
 def tuning_MLP(datapath, X, y, data_variants, training_params_dict):
+
+    set_seeds()
 
     # for tracking the best validation result
     overall_results = {}
@@ -303,13 +321,14 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict):
     # create an optuna tuning object, num trials default = 20
     num_trials = training_params_dict['num_trials']
     study = optuna.create_study(
-        direction="maximize",
+        direction="minimize",
         sampler=optuna.samplers.TPESampler(seed=training_params_dict['optunaseed']),
         pruner=optuna.pruners.PercentilePruner(percentile=training_params_dict['percentile'], n_min_trials=training_params_dict['min_trials'])
     )
     
     # searching loop with objective tuning
     study.optimize(lambda trial: objective(trial, X, y, data_variants, training_params_dict), n_trials=num_trials)
+
 
     # print statistics after tuning
     print("Optuna study finished, study statistics:")
