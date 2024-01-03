@@ -160,8 +160,7 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
 
     # define loss function and optimizer
     loss_function = torch.nn.MSELoss()
-    optimizer = getattr(optim, tuning_params['optimizer'])(model.parameters(),
-                    lr=tuning_params['learning_rate'], weight_decay=tuning_params['weight_decay'])
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=tuning_params['learning_rate'])
     
     # track the best loss value and best model
     best_model = copy.deepcopy(model)
@@ -206,9 +205,9 @@ def objective(trial, X, y, data_variants, training_params_dict):
 
     # for tuning parameters
     tuning_params_dict = {
-        'learning_rate': trial.suggest_float('learning_rate', 1e-6, 1e-2), 
-        'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
-        'weight_decay': trial.suggest_float('weight_decay', 1e-10, 1e-2),
+        'learning_rate': trial.suggest_categorical('learning_rate', [1e-5, 1e-4, 1e-3, 1e-2, 1e-1]), 
+        # 'optimizer': trial.suggest_categorical('optimizer', ["Adam", "SGD"]),
+        # 'weight_decay': trial.suggest_float('weight_decay', 1e-10, 1e-2),
         'initial_outfeatures_factor': trial.suggest_float('initial_outfeatures_factor', 0.05, 0.7, step=0.001),
         'activation': trial.suggest_categorical('activation', ['LeakyReLU', 'ReLU', 'Tanh']),
         'n_layers': trial.suggest_int("n_layers", 1, 5),
