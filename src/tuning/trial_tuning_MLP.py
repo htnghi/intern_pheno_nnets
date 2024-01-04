@@ -149,7 +149,13 @@ def predict(model, val_loader, device):
             # print('Outputs', outputs)
             predictions = torch.clone(outputs) if predictions is None else torch.cat((predictions, outputs))
             # print('Predictions', predictions.shape)
-    return predictions.detach().numpy()
+            
+    if device == torch.device('cpu'):
+        ret_output = predictions.detach().numpy()
+    else:
+        ret_output = predictions.cpu().detach().numpy()
+    
+    return ret_output
 
 def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_val, y_val, device):
 
@@ -330,7 +336,7 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict, device):
     )
     
     # searching loop with objective tuning
-    study.optimize(lambda trial: objective(trial, X, y, data_variants, training_params_dict), n_trials=num_trials)
+    study.optimize(lambda trial: objective(trial, X, y, data_variants, training_params_dict, device), n_trials=num_trials)
 
 
     # print statistics after tuning
