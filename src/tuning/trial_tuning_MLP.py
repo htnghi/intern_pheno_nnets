@@ -108,6 +108,7 @@ def train_one_epoch(model, train_loader, loss_function, optimizer):
     
     model.train()
     for i, (inputs, targets) in enumerate(train_loader):
+        inputs, targets = inputs.to(device), targets.to(device)
         pred_outputs = model(inputs)
         targets = targets.reshape((targets.shape[0], 1))
         loss_training = loss_function(pred_outputs, targets)
@@ -126,6 +127,7 @@ def validate_one_epoch(model, val_loader, loss_function):
     with torch.no_grad():
         for i, (inputs, targets) in enumerate(val_loader):
             # cast the inputs and targets into float
+            inputs, targets = inputs.to(device), targets.to(device)
             inputs, targets = inputs.float(), targets.float()
             targets = targets.reshape((targets.shape[0], 1))
             outputs = model(inputs)
@@ -140,6 +142,7 @@ def predict(model, val_loader):
     predictions = None
     with torch.no_grad():
         for i, (inputs, targets) in enumerate(val_loader):
+            inputs, targets = inputs.to(device), targets.to(device)
             inputs  = inputs.float()
             outputs = model(inputs)
             # print('Target in predic function', targets)
@@ -155,8 +158,8 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
     tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val)
     
     # define data loaders for training and testing data
-    train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=training_params['batch_size'], shuffle=True)
-    val_loader   = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=training_params['batch_size'], shuffle=False)
+    train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=training_params['batch_size'], shuffle=True, num_workers=2)
+    val_loader   = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=training_params['batch_size'], shuffle=False, num_workers=2)
 
     # define loss function and optimizer
     loss_function = torch.nn.MSELoss()
@@ -216,6 +219,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
     }
 
     # extract preprocessed data variants for tuning
+    minmax_scaler_mode = data_variants[0]
     standard_scaler_mode = data_variants[1]
     pca_fitting_mode = data_variants[2]
 
@@ -243,8 +247,8 @@ def objective(trial, X, y, data_variants, training_params_dict):
         X_train, y_train, X_val, y_val = X[train_ids], y[train_ids], X[val_ids], y[val_ids]
 
         # preprocessing data
-        y_train, y_val = preprocess_mimax_scaler(y_train, y_val)
-
+        if minmax_scaler_mode == True:
+            y_train, y_val = preprocess_mimax_scaler(y_train, y_val)
         if standard_scaler_mode == True:
             X_train, X_val = preprocess_standard_scaler(X_train, X_val)
         elif pca_fitting_mode == True:
@@ -253,7 +257,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
         # create model
         num_features = X_train.shape[1]
         try:
-            model = MLP(trial, in_features=num_features, tuning_params=tuning_params_dict)
+            model = MLP(trial, in_features=num_features, tuning_params=tuning_params_dict).to(device)
     
         except Exception as err:
             print('Trial failed. Error in model creation, {}'.format(err))
