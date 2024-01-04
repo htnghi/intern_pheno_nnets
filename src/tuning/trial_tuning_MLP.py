@@ -164,8 +164,8 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
     tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val)
     
     # define data loaders for training and testing data
-    train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=training_params['batch_size'], shuffle=True, num_workers=2)
-    val_loader   = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=training_params['batch_size'], shuffle=False, num_workers=2)
+    train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=training_params['batch_size'], shuffle=True)
+    val_loader   = DataLoader(dataset=list(zip(tensor_X_val, tensor_y_val)), batch_size=training_params['batch_size'], shuffle=False)
 
     # define loss function and optimizer
     loss_function = torch.nn.MSELoss()

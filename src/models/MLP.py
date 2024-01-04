@@ -102,9 +102,10 @@ def MLP(in_features, tuned_params):
 # ==============================================================
 # The trainning loop and testing the model with tuned params
 # ==============================================================
-def train_each_epoch(model, train_loader, loss_function, optimizer):
+def train_each_epoch(model, train_loader, loss_function, optimizer, device):
     arr_losses = []
     for i, (inputs, targets) in enumerate(train_loader):
+        inputs, targets = inputs.to(device), targets.to(device)
         model.train()
         pred_outputs = model(inputs)
         loss = loss_function(pred_outputs, targets)
@@ -114,7 +115,7 @@ def train_each_epoch(model, train_loader, loss_function, optimizer):
         optimizer.step()
     return np.average(arr_losses)
 
-def train_loop(X_train, y_train, hyperparameters):
+def train_loop(X_train, y_train, hyperparameters, device):
 
     # extract training and tuned parameters
     batch_size = 32
@@ -133,7 +134,7 @@ def train_loop(X_train, y_train, hyperparameters):
     train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True) 
 
     # create and init the model
-    model = MLP(n_inputs, hyperparameters)
+    model = MLP(n_inputs, hyperparameters).to(device)
     
 
     # define loss function
@@ -141,14 +142,14 @@ def train_loop(X_train, y_train, hyperparameters):
 
     for epoch in range(num_epochs):
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=momentum)
-        avg_loss = train_each_epoch(model, train_loader, loss_function, optimizer)
+        avg_loss = train_each_epoch(model, train_loader, loss_function, optimizer, device)
         print ('Epoch {}/{}: avg_loss={:.5f}'.format(epoch, num_epochs, avg_loss))
     return model
 
 # ==============================================================
 # Call and train model
 # ==============================================================
-def run_train_MLP(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants):
+def run_train_MLP(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants, device):
 
     # set seed
     set_seeds()
@@ -161,7 +162,7 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test, hyperparameters, d
         X_train, X_test = decomposition_PCA(X_train, X_test, hyperparameters['pca'])
     
     # training model
-    trained_model = train_loop(X_train, y_train, hyperparameters)
+    trained_model = train_loop(X_train, y_train, hyperparameters, device)
 
     # save the trained model
     # torch.save(model, datapath + '/utils/tuned_MLP.model')
@@ -180,11 +181,17 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test, hyperparameters, d
     trained_model.eval()
     with torch.no_grad():
 
-        y_preds = trained_model(tensor_X_test)
+        y_preds_1 = trained_model(tensor_X_test)
 
         # change to numpy for calculating metrics in scikit learn library
-        y_preds = y_preds.detach().squeeze().numpy()
+        y_preds_1 = y_preds.detach().squeeze().numpy()
         y_test  = y_test.squeeze()
+
+        if device == torch.device('cpu'):
+            y_preds = y_preds_1.detach().squeeze().numpy()
+        else:
+            y_preds = y_preds_1.cpu().detach().squeeze().numpy()
+    
 
         # collect mse, r2, explained variance
         test_mse = mean_squared_error(y_test, y_preds)
