@@ -136,7 +136,6 @@ def train_loop(X_train, y_train, hyperparameters, device):
     # create and init the model
     model = MLP(n_inputs, hyperparameters).to(device)
     
-
     # define loss function
     loss_function = torch.nn.MSELoss() 
 
@@ -144,6 +143,7 @@ def train_loop(X_train, y_train, hyperparameters, device):
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=momentum)
         avg_loss = train_each_epoch(model, train_loader, loss_function, optimizer, device)
         print ('Epoch {}/{}: avg_loss={:.5f}'.format(epoch, num_epochs, avg_loss))
+
     return model
 
 # ==============================================================
@@ -180,18 +180,17 @@ def run_train_MLP(datapath, X_train, y_train, X_test, y_test, hyperparameters, d
 
     trained_model.eval()
     with torch.no_grad():
-
+        tensor_X_test.to(device)
         y_preds_1 = trained_model(tensor_X_test)
 
         # change to numpy for calculating metrics in scikit learn library
-        y_preds_1 = y_preds.detach().squeeze().numpy()
-        y_test  = y_test.squeeze()
+        # y_preds_1 = y_preds.detach().squeeze().numpy()
+        y_test = y_test.squeeze()
 
         if device == torch.device('cpu'):
             y_preds = y_preds_1.detach().squeeze().numpy()
         else:
             y_preds = y_preds_1.cpu().detach().squeeze().numpy()
-    
 
         # collect mse, r2, explained variance
         test_mse = mean_squared_error(y_test, y_preds)
