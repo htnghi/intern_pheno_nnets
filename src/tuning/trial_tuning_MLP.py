@@ -149,7 +149,7 @@ def predict(model, val_loader, device):
             # print('Outputs', outputs)
             predictions = torch.clone(outputs) if predictions is None else torch.cat((predictions, outputs))
             # print('Predictions', predictions.shape)
-            
+
     if device == torch.device('cpu'):
         ret_output = predictions.detach().numpy()
     else:
@@ -279,6 +279,11 @@ def objective(trial, X, y, data_variants, training_params_dict, device):
                 early_stopping_points.append(stopping_point)
             else:
                 early_stopping_points.append(training_params_dict['num_epochs'])
+            
+            if len(y_pred) == (len(y_val) - 1):
+                # might happen if batch size leads to a last batch with only one sample which will be dropped then
+                print('y_val has one element less than y_true (e.g. due to batch size config) -> drop last element')
+                y_val = y_val[:-1]
             
             # calculate objective value
             obj_value1 = sklearn.metrics.mean_squared_error(y_true=y_val, y_pred=y_pred)
