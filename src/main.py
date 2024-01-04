@@ -121,11 +121,11 @@ if __name__ == '__main__':
     if tuned == 1:
         # set up parameters for tuning
         training_params_dict = {
-            'num_trials': 100,
+            'num_trials': 20,
             'min_trials': 20,
             'percentile': 65,
-            'optunaseed': 77,
-            'num_epochs': 100,
+            'optunaseed': 42,
+            'num_epochs': 50,
             'early_stop': 20,
             'batch_size': 32
         }
@@ -135,14 +135,14 @@ if __name__ == '__main__':
             print('Tuning MLP with dataset pheno-{}, minmax={}, standard={}, pcafit={}'.format(dataset, minmax_scale, standa_scale, pca_fitting))
             print('---------------------------------------------------------\n')
             X_train, y_train, X_test, y_test = load_split_train_test_additive(datapath, dataset)
-            model = tuning_MLP(datapath, X_train, y_train, data_variants, training_params_dict)
+            model = tuning_MLP(datapath, X_train, y_train, data_variants, training_params_dict, device)
 
         elif model == 'CNN':
             print('---------------------------------------------------------')
             print('Tuning CNN with dataset pheno-{}'.format(dataset))
             print('---------------------------------------------------------\n')
             X_train, y_train, X_test, y_test = load_split_train_test_onehot(datapath, dataset)
-            model = tuning_CNN(datapath, X_train, y_train, data_variants, training_params_dict)
+            model = tuning_CNN(datapath, X_train, y_train, data_variants, training_params_dict, device)
         
         elif model == 'RNN':
             print('---------------------------------------------------------')
@@ -156,6 +156,31 @@ if __name__ == '__main__':
         # ----------------------------------------------------
         tuned_filepath = args["tuned_file"]
         tuned_content = open(tuned_filepath, 'r').readline()
+
+        # testing the file
+        # python main.py --data_dir /home/ctminh/projects/nnets_genomic_prediction/src --model MLP --tuned 0 \
+        # --tuned_file ./tuning/tuned_parameters/mlp/mlp_expvar_data1_minmax_fixedoutfactor.json --minmax 1 --standa 0 --pcafit 0 --dataset 1
+
+        # python main.py --data_dir /home/ctminh/projects/nnets_genomic_prediction/src --model CNN --tuned 0 \
+        # --tuned_file ./tuning/tuned_parameters/cnn/cnn_expvar_data1_minmax.json --minmax 1 --standa 0 --pcafit 0 --dataset 1
+
+        # python main.py --data_dir /home/ctminh/projects/nnets_genomic_prediction/src --model RNN --tuned 0 \
+        # --tuned_file ./tuning/tuned_parameters/rnn/rnn_expvar_data1_minmax.json --minmax 1 --standa 0 --pcafit 0 --dataset 1
+
+        filename = tuned_filepath.split('/')[-1]
+        filename_tokens = filename.split('_')
+        dbcheck_model = filename_tokens[0]
+        dbcheck_obj_direction = filename_tokens[1]
+        dbcheck_dataset = filename_tokens[2]
+        dbcheck_yscale_minmax = filename_tokens[3]
+        dbcheck_xscale_standa = ''
+        dbcheck_xscale_pcafit = ''
+        print('DB_CHECK: tuned_file hyperparameters {}'.format(filename))
+        print('  + dbcheck_model: {}'.format(dbcheck_model))
+        print('  + dbcheck_obj_direction: {}'.format(dbcheck_obj_direction))
+        print('  + dbcheck_dataset: {}'.format(dbcheck_dataset))
+        print('  + dbcheck_yscale_minmax: {}'.format(dbcheck_yscale_minmax))
+        print('----------------------------------------------------------\n')
 
         # extract the details
         tuned_content_jsonformat = json.loads(tuned_content.replace("'", "\""))
@@ -183,6 +208,3 @@ if __name__ == '__main__':
             X_train, y_train, X_test, y_test = load_split_train_test_onehot(datapath, dataset)
             model = run_train_RNN(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants, device)
     
-
-
-

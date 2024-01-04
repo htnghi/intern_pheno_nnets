@@ -104,7 +104,7 @@ def MLP(optuna_trial, in_features, tuning_params):
 # ==============================================================
 # Define training and validation loop
 # ==============================================================
-def train_one_epoch(model, train_loader, loss_function, optimizer):
+def train_one_epoch(model, train_loader, loss_function, optimizer, device):
     
     model.train()
     for i, (inputs, targets) in enumerate(train_loader):
@@ -116,7 +116,7 @@ def train_one_epoch(model, train_loader, loss_function, optimizer):
         loss_training.backward()
         optimizer.step()
 
-def validate_one_epoch(model, val_loader, loss_function):
+def validate_one_epoch(model, val_loader, loss_function, device):
 
     # arrays for tracking eval results
     avg_loss = 0.0
@@ -137,7 +137,7 @@ def validate_one_epoch(model, val_loader, loss_function):
     avg_loss = np.average(arr_val_losses)
     return avg_loss
 
-def predict(model, val_loader):
+def predict(model, val_loader, device):
     model.eval()
     predictions = None
     with torch.no_grad():
@@ -151,7 +151,7 @@ def predict(model, val_loader):
             # print('Predictions', predictions.shape)
     return predictions.detach().numpy()
 
-def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_val, y_val):
+def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_val, y_val, device):
 
     # transform data to tensor format
     tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train)
@@ -177,8 +177,8 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
     num_epochs = training_params['num_epochs']
     early_stop_patience = training_params['early_stop']
     for epoch in range(num_epochs):
-        train_one_epoch(model, train_loader, loss_function, optimizer)
-        val_loss = validate_one_epoch(model, val_loader, loss_function)
+        train_one_epoch(model, train_loader, loss_function, optimizer, device)
+        val_loss = validate_one_epoch(model, val_loader, loss_function, device)
         if best_loss == None or val_loss < best_loss:
             best_loss = val_loss
             best_model = copy.deepcopy(model)
@@ -193,18 +193,18 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
             print("Early Stopping at epoch " + str(epoch))
             early_stopping_point = epoch - early_stop_patience
             model = best_model
-            y_pred = predict(model, val_loader)
+            y_pred = predict(model, val_loader, device)
             return y_pred, early_stopping_point
     
     # return the best predicted values
-    y_pred = predict(best_model, val_loader)
+    y_pred = predict(best_model, val_loader, device)
 
     return y_pred, early_stopping_point
 
 # ==============================================================
 # Define objective function for tuning hyperparameters
 # ==============================================================
-def objective(trial, X, y, data_variants, training_params_dict):
+def objective(trial, X, y, data_variants, training_params_dict, device):
 
     # for tuning parameters
     tuning_params_dict = {
@@ -266,7 +266,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
         # call training model over each fold
         try:
             y_pred, stopping_point = train_val_loop(model, training_params_dict, tuning_params_dict,
-                                     X_train, y_train, X_val, y_val)
+                                     X_train, y_train, X_val, y_val, device)
             
             # record the early-stopping points
             if stopping_point is not None:
@@ -314,7 +314,7 @@ def objective(trial, X, y, data_variants, training_params_dict):
 # ==============================================================
 # Call tuning function
 # ==============================================================
-def tuning_MLP(datapath, X, y, data_variants, training_params_dict):
+def tuning_MLP(datapath, X, y, data_variants, training_params_dict, device):
 
     set_seeds()
 
