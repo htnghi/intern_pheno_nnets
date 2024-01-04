@@ -1,4 +1,5 @@
 import torch
+import random
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,6 +14,7 @@ from torch.nn import Sequential, MaxPool1d, Flatten, LeakyReLU, BatchNorm1d, Dro
 from torch.optim import SGD, Adam
 from torch.utils.data import DataLoader
 
+import random
 # ==============================================================
 # Utils/Help function
 # ==============================================================
@@ -52,6 +54,21 @@ def decomposition_PCA(X_train, X_val, tuning_params):
     # pk.dump(pca, open('./pca.pkl', 'wb'))
     # print('shape after PCA: train ={}, val={}'.format(X_train.shape, X_val.shape))
     return X_train_scaled, X_val_scaled
+
+def set_seeds(seed: int=42):
+    """
+    Set all seeds of libs with a specific function for reproducibility of results
+
+    :param seed: seed to use
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
 # ==============================================================
 # Define CNN Model
@@ -164,6 +181,8 @@ def train_loop(X_train, y_train, hyperparameters):
 
 def run_train_CNN(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants):
 
+    set_seeds(seed=42)
+
     # preprocessing data
     y_train, y_test = preprocess_mimax_scaler(y_train, y_test)
     
@@ -185,6 +204,7 @@ def run_train_CNN(datapath, X_train, y_train, X_test, y_test, hyperparameters, d
     # X_test = pca_reloaded.transform(X_test)
     tensor_X_test = torch.Tensor(X_test)
     tensor_X_test = torch.swapaxes(tensor_X_test, 1, 2)
+    print("Shape of tensor X_test", tensor_X_test.shape)
 
     trained_model.eval()
     with torch.no_grad():

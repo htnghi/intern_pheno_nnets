@@ -121,11 +121,11 @@ if __name__ == '__main__':
     if tuned == 1:
         # set up parameters for tuning
         training_params_dict = {
-            'num_trials': 20,
+            'num_trials': 100,
             'min_trials': 20,
             'percentile': 65,
             'optunaseed': 42,
-            'num_epochs': 50,
+            'num_epochs': 80,
             'early_stop': 20,
             'batch_size': 32
         }
@@ -194,13 +194,13 @@ if __name__ == '__main__':
             print('Final train MLP with dataset pheno-{}, minmax={}, standard={}, pcafit={}'.format(dataset, minmax_scale, standa_scale, pca_fitting))
             print('---------------------------------------------------------\n')
             X_train, y_train, X_test, y_test = load_split_train_test_additive(datapath, dataset)
-            model = run_train_MLP(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants)
+            model = run_train_MLP(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants, device)
         elif model == 'CNN':
             print('---------------------------------------------------------')
             print('Final train CNN with dataset pheno-{}, minmax={}, standard={}, pcafit={}'.format(dataset, minmax_scale, standa_scale, pca_fitting))
             print('---------------------------------------------------------\n')
             X_train, y_train, X_test, y_test = load_split_train_test_onehot(datapath, dataset)
-            model = run_train_CNN(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants)
+            model = run_train_CNN(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants, device)
         else:
             print('---------------------------------------------------------')
             print('Final train RNN with dataset pheno-{}, minmax={}, standard={}, pcafit={}'.format(dataset, minmax_scale, standa_scale, pca_fitting))
