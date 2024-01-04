@@ -1,0 +1,1 @@
+{"avg_epochs": 58, "learning_rate": 0.001, "weight_decay": 0.007975887901028877, "initial_outfeatures_factor": 0.5780000000000001, "activation": "Tanh", "n_layers": 4, "dropout": 0.35, "pca": 0.9}

@@ -1,6 +1,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.metrics import explained_variance_score, r2_score, mean_squared_error, mean_absolute_error
@@ -54,6 +55,20 @@ def decomposition_PCA(X_train, X_val, exp_var):
     
     return X_train_scaled, X_val_scaled
 
+def set_seeds(seed: int=42):
+    """
+    Set all seeds of libs with a specific function for reproducibility of results
+
+    :param seed: seed to use
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 # ==============================================================
 # Build MLP Model
 # ==============================================================
@@ -106,7 +121,7 @@ def train_loop(X_train, y_train, hyperparameters):
     num_epochs = hyperparameters['avg_epochs']
     learning_rate = hyperparameters['learning_rate']
     momentum = hyperparameters['weight_decay']
-    optimizer_type = hyperparameters['optimizer']
+    # optimizer_type = hyperparameters['optimizer']
 
     # number of input features
     n_inputs = np.size(X_train, 1)
@@ -119,12 +134,13 @@ def train_loop(X_train, y_train, hyperparameters):
 
     # create and init the model
     model = MLP(n_inputs, hyperparameters)
+    
 
     # define loss function
     loss_function = torch.nn.MSELoss() 
 
     for epoch in range(num_epochs):
-        optimizer = getattr(optim, optimizer_type)(model.parameters(), lr=learning_rate, weight_decay=momentum)
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=momentum)
         avg_loss = train_each_epoch(model, train_loader, loss_function, optimizer)
         print ('Epoch {}/{}: avg_loss={:.5f}'.format(epoch, num_epochs, avg_loss))
     return model
@@ -134,6 +150,8 @@ def train_loop(X_train, y_train, hyperparameters):
 # ==============================================================
 def run_train_MLP(datapath, X_train, y_train, X_test, y_test, hyperparameters, data_variants):
 
+    # set seed
+    set_seeds()
     # preprocessing data
     y_train, y_test = preprocess_mimax_scaler(y_train, y_test)
 
