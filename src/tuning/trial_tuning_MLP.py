@@ -324,7 +324,7 @@ def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs,
     print('----------------------------------------------\n')
 
     # try to return avg stop epochs
-    avg_stop_epochs.append(early_stopping_point)
+    avg_stop_epochs[trial.number] = early_stopping_point
 
     # return current_val_expv
     return current_val_loss
@@ -344,7 +344,7 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict, device):
 
     # for tracking the best validation result
     overall_results = {}
-    avg_stopping_epochs = []
+    avg_stopping_epochs = [training_params_dict['num_epochs']] * training_params_dict['num_trials']
 
     # create an optuna tuning object, num trials default = 20
     num_trials = training_params_dict['num_trials']
