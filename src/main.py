@@ -121,11 +121,11 @@ if __name__ == '__main__':
     if tuned == 1:
         # set up parameters for tuning
         training_params_dict = {
-            'num_trials': 100,
+            'num_trials': 5,
             'min_trials': 20,
             'percentile': 65,
             'optunaseed': 42,
-            'num_epochs': 80,
+            'num_epochs': 5,
             'early_stop': 20,
             'batch_size': 32
         }
@@ -135,14 +135,19 @@ if __name__ == '__main__':
             print('Tuning MLP with dataset pheno-{}, minmax={}, standard={}, pcafit={}'.format(dataset, minmax_scale, standa_scale, pca_fitting))
             print('---------------------------------------------------------\n')
             X_train, y_train, X_test, y_test = load_split_train_test_additive(datapath, dataset)
-            model = tuning_MLP(datapath, X_train, y_train, data_variants, training_params_dict, device)
+            best_params, num_avg_stop_epochs = tuning_MLP(datapath, X_train, y_train, data_variants, training_params_dict)
+            exit(1)
+            result_test = evaluate_result(datapath, X_train, y_train, X_test, y_test, best_params, num_avg_stop_epochs, data_variants)
 
+            
         elif model == 'CNN':
             print('---------------------------------------------------------')
             print('Tuning CNN with dataset pheno-{}'.format(dataset))
             print('---------------------------------------------------------\n')
             X_train, y_train, X_test, y_test = load_split_train_test_onehot(datapath, dataset)
-            model = tuning_CNN(datapath, X_train, y_train, data_variants, training_params_dict, device)
+            best_params, num_avg_stop_epochs = tuning_CNN(datapath, X_train, y_train, data_variants, training_params_dict)
+            result_test = evaluate_result(datapath, X_train, y_train, X_test, y_test, best_params, num_avg_stop_epochs, data_variants)
+
         
         elif model == 'RNN':
             print('---------------------------------------------------------')
