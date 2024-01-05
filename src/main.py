@@ -1,9 +1,9 @@
 import argparse
 import json
 
-from models.RNN import *
-from models.MLP import *
-from models.CNN import *
+# from models.RNN import *
+# from models.MLP import *
+# from models.CNN import *
 
 from tuning.trial_tuning_MLP import *
 from tuning.trial_tuning_CNN import *
@@ -121,11 +121,11 @@ if __name__ == '__main__':
     if tuned == 1:
         # set up parameters for tuning
         training_params_dict = {
-            'num_trials': 5,
+            'num_trials': 100,
             'min_trials': 20,
             'percentile': 65,
             'optunaseed': 42,
-            'num_epochs': 5,
+            'num_epochs': 80,
             'early_stop': 20,
             'batch_size': 32
         }
@@ -135,9 +135,8 @@ if __name__ == '__main__':
             print('Tuning MLP with dataset pheno-{}, minmax={}, standard={}, pcafit={}'.format(dataset, minmax_scale, standa_scale, pca_fitting))
             print('---------------------------------------------------------\n')
             X_train, y_train, X_test, y_test = load_split_train_test_additive(datapath, dataset)
-            best_params, num_avg_stop_epochs = tuning_MLP(datapath, X_train, y_train, data_variants, training_params_dict)
-            exit(1)
-            result_test = evaluate_result(datapath, X_train, y_train, X_test, y_test, best_params, num_avg_stop_epochs, data_variants)
+            best_params = tuning_MLP(datapath, X_train, y_train, data_variants, training_params_dict, device)
+            evaluate_result_MLP(datapath, X_train, y_train, X_test, y_test, best_params, data_variants, device)
 
             
         elif model == 'CNN':
@@ -145,8 +144,8 @@ if __name__ == '__main__':
             print('Tuning CNN with dataset pheno-{}'.format(dataset))
             print('---------------------------------------------------------\n')
             X_train, y_train, X_test, y_test = load_split_train_test_onehot(datapath, dataset)
-            best_params, num_avg_stop_epochs = tuning_CNN(datapath, X_train, y_train, data_variants, training_params_dict)
-            result_test = evaluate_result(datapath, X_train, y_train, X_test, y_test, best_params, num_avg_stop_epochs, data_variants)
+            best_params = tuning_CNN(datapath, X_train, y_train, data_variants, training_params_dict, device)
+            evaluate_result_CNN(datapath, X_train, y_train, X_test, y_test, best_params, data_variants, device)
 
         
         elif model == 'RNN':

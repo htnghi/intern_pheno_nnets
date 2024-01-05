@@ -104,11 +104,11 @@ def MLP(in_features, tuning_params):
 # ==============================================================
 # Define training and validation loop
 # ==============================================================
-def train_one_epoch(model, train_loader, loss_function, optimizer):
+def train_one_epoch(model, train_loader, loss_function, optimizer, device):
     
     model.train()
     for i, (inputs, targets) in enumerate(train_loader):
-        # inputs, targets = inputs.to(device), targets.to(device)
+        inputs, targets = inputs.to(device), targets.to(device)
         pred_outputs = model(inputs)
         # targets = targets.reshape((targets.shape[0], 1))
         loss_training = loss_function(pred_outputs, targets)
@@ -116,7 +116,7 @@ def train_one_epoch(model, train_loader, loss_function, optimizer):
         loss_training.backward()
         optimizer.step()
 
-def validate_one_epoch(model, val_loader, loss_function):
+def validate_one_epoch(model, val_loader, loss_function, device):
 
     # arrays for tracking eval results
     avg_loss = 0.0
@@ -127,7 +127,7 @@ def validate_one_epoch(model, val_loader, loss_function):
     with torch.no_grad():
         for i, (inputs, targets) in enumerate(val_loader):
             # cast the inputs and targets into float
-            # inputs, targets = inputs.to(device), targets.to(device)
+            inputs, targets = inputs.to(device), targets.to(device)
             # inputs, targets = inputs.float(), targets.float()
             # targets = targets.reshape((targets.shape[0], 1))
             outputs = model(inputs)
@@ -137,12 +137,12 @@ def validate_one_epoch(model, val_loader, loss_function):
     avg_loss = np.average(arr_val_losses)
     return avg_loss
 
-def predict(model, val_loader):
+def predict(model, val_loader, device):
     model.eval()
     predictions = None
     with torch.no_grad():
         for i, (inputs, targets) in enumerate(val_loader):
-            # inputs, targets = inputs.to(device), targets.to(device)
+            inputs, targets = inputs.to(device), targets.to(device)
             inputs  = inputs.float()
             outputs = model(inputs)
             # print('Target in predic function', targets)
@@ -150,19 +150,22 @@ def predict(model, val_loader):
             predictions = torch.clone(outputs) if predictions is None else torch.cat((predictions, outputs))
             # print('Predictions', predictions.shape)
 
-    # if device == torch.device('cpu'):
-    #     ret_output = predictions.detach().numpy()
-    # else:
-    #     ret_output = predictions.cpu().detach().numpy()
+    if device == torch.device('cpu'):
+        ret_output = predictions.detach().numpy()
+    else:
+        ret_output = predictions.cpu().detach().numpy()
     
-    # return ret_output
-    return predictions
+    return ret_output
+    # return predictions
 
-def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_val, y_val):
+def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_val, y_val, device):
 
     # transform data to tensor format
     tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train)
     tensor_X_val, tensor_y_val = torch.Tensor(X_val), torch.Tensor(y_val)
+
+    # squeeze y for training MLP to tensor
+    tensor_y_train, tensor_y_val = tensor_y_train.view(len(y_train),1), tensor_y_val.view(len(y_val),1)
     
     # define data loaders for training and testing data
     train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=training_params['batch_size'], shuffle=True)
@@ -184,8 +187,8 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
     num_epochs = training_params['num_epochs']
     early_stop_patience = training_params['early_stop']
     for epoch in range(num_epochs):
-        train_one_epoch(model, train_loader, loss_function, optimizer)
-        val_loss = validate_one_epoch(model, val_loader, loss_function)
+        train_one_epoch(model, train_loader, loss_function, optimizer, device)
+        val_loss = validate_one_epoch(model, val_loader, loss_function, device)
         if best_loss == None or val_loss < best_loss:
             best_loss = val_loss
             best_model = copy.deepcopy(model)
@@ -200,18 +203,18 @@ def train_val_loop(model, training_params, tuning_params, X_train, y_train, X_va
             print("Early Stopping at epoch " + str(epoch))
             early_stopping_point = epoch - early_stop_patience
             model = best_model
-            y_pred = predict(model, val_loader)
+            y_pred = predict(model, val_loader, device)
             return y_pred, early_stopping_point
     
     # return the best predicted values
-    y_pred = predict(best_model, val_loader)
+    y_pred = predict(best_model, val_loader, device)
 
     return y_pred, early_stopping_point
 
 # ==============================================================
 # Define objective function for tuning hyperparameters
 # ==============================================================
-def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs):
+def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs, device):
 
     # for tuning parameters
     tuning_params_dict = {
@@ -264,7 +267,7 @@ def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs)
         # create model
         num_features = X_train.shape[1]
         try:
-            model = MLP(trial, in_features=num_features, tuning_params=tuning_params_dict)
+            model = MLP(in_features=num_features, tuning_params=tuning_params_dict).to(device)
     
         except Exception as err:
             print('Trial failed. Error in model creation, {}'.format(err))
@@ -273,7 +276,7 @@ def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs)
         # call training model over each fold
         try:
             y_pred, stopping_point = train_val_loop(model, training_params_dict, tuning_params_dict,
-                                     X_train, y_train, X_val, y_val)
+                                     X_train, y_train, X_val, y_val, device)
             
             # record the early-stopping points
             if stopping_point is not None:
@@ -329,7 +332,7 @@ def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs)
 # ==============================================================
 # Call tuning function
 # ==============================================================
-def tuning_MLP(datapath, X, y, data_variants, training_params_dict):
+def tuning_MLP(datapath, X, y, data_variants, training_params_dict, device):
 
     set_seeds()
 
@@ -352,7 +355,7 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict):
     )
     
     # searching loop with objective tuning
-    study.optimize(lambda trial: objective(trial, X, y, data_variants, training_params_dict, avg_stopping_epochs), n_trials=num_trials)
+    study.optimize(lambda trial: objective(trial, X, y, data_variants, training_params_dict, avg_stopping_epochs, device), n_trials=num_trials)
     set_seeds()
 
     # get early stopping num epochs
@@ -372,44 +375,58 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict):
     print('----------------------------------------------\n')
 
     best_params = study.best_trial.params
-    overall_results[key] = {'best_params': best_params}
+    best_params['avg_epochs'] = num_avg_stop_epochs
+    # overall_results[key] = {'best_params': best_params}
+    print('Check best params: {}'.format(best_params))
 
     # record best parameters to file
     with open(f"./tuned_mlp_" + "pheno" + pheno + minmax + standard + pcafitting + ".json", 'w') as fp:
         json.dump(best_params, fp)
 
-    return best_params, num_avg_stop_epochs
+    return best_params
 
-def evaluate_result(datapath, X_train, y_train, X_test, y_test, best_params, num_avg_stop_epochs, data_variants):
+    minmax = '_minmax' if data_variants[0] == True else ''
+def evaluate_result_MLP(datapath, X_train, y_train, X_test, y_test, best_params, data_variants, device):
 
     set_seeds()
     
-    # extract training and tuned parameters
-    batch_size = 32
-    num_epochs = num_avg_stop_epochs
-    learning_rate = best_params['learning_rate']
-    momentum = best_params['weight_decay']
+    # for tracking the tuning information
+    minmax = '_minmax' if data_variants[0] == True else ''
+    standard = '_standard' if data_variants[1] == True else ''
+    pcafitting = '_pca' if data_variants[2] == True else ''
+    pheno = str(data_variants[3])
+
+    # extract preprocessed data variants for tuning
+    minmax_scaler_mode = data_variants[0]
+    standard_scaler_mode = data_variants[1]
+    pca_fitting_mode = data_variants[2]
 
     # preprocessing data
-    if data_variants[0] == 1: # minmax scaler
+    if minmax_scaler_mode == 1: # minmax scaler
         y_train, y_test = preprocess_mimax_scaler(y_train, y_test)
-    if data_variants[1] == 1: # standard scaler
+    if standard_scaler_mode == 1: # standard scaler
         X_train, X_test = preprocess_standard_scaler(X_train, X_test)
-    elif data_variants[2] == 1: # pca fitting
+    elif pca_fitting_mode == 1: # pca fitting
         X_train, X_test = decomposition_PCA(X_train, X_test, best_params['pca'])
+
+    # extract training and tuned parameters
+    batch_size = 32
+    num_epochs = best_params['avg_epochs']
+    learning_rate = best_params['learning_rate']
+    momentum = best_params['weight_decay']
 
     # number of input features
     num_features = X_train.shape[1]
 
     # create model
-    model = MLP(num_features=num_features, tuning_params=best_params)
+    model = MLP(in_features=num_features, tuning_params=best_params).to(device)
 
     # transform data to tensor format
     tensor_X_train, tensor_y_train = torch.Tensor(X_train), torch.Tensor(y_train)
     tensor_X_test, tensor_y_test = torch.Tensor(X_test), torch.Tensor(y_test)
 
-    # squeeze y for training CNN to tensor
-    # tensor_y_train, tensor_y_val = tensor_y_train.view(len(y_train),1), tensor_y_val.view(len(y_test),1)
+    # squeeze y for training MLP to tensor
+    tensor_y_train, tensor_y_test = tensor_y_train.view(len(y_train),1), tensor_y_test.view(len(y_test),1)
 
     # define data loaders for training and testing data
     train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
@@ -421,14 +438,13 @@ def evaluate_result(datapath, X_train, y_train, X_test, y_test, best_params, num
     optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=momentum)
 
     # training loop over epochs
-    num_epochs = num_epochs
+    # num_epochs = num_epochs
 
     for epoch in range(num_epochs):
-        avg_loss = train_one_epoch(model, train_loader, loss_function, optimizer)
-        print ('Epoch {}/{}: avg_loss={:.5f}'.format(epoch, num_epochs, avg_loss))
+        avg_loss = train_one_epoch(model, train_loader, loss_function, optimizer, device)
     
     # predict result test 
-    y_pred = predict(model, test_loader)
+    y_pred = predict(model, test_loader, device)
 
     # collect mse, r2, explained variance
     test_mse = sklearn.metrics.mean_squared_error(y_true=y_test, y_pred=y_pred)
@@ -437,14 +453,9 @@ def evaluate_result(datapath, X_train, y_train, X_test, y_test, best_params, num
     test_mae = sklearn.metrics.mean_absolute_error(y_true=y_test, y_pred=y_pred)
 
     print('--------------------------------------------------------------')
-    print('Test results: avg_loss={:.4f}, avg_expvar={:.4f}, avg_r2score={:.4f}, avg_mae={:.4f}'.format(test_mse, test_exp_variance, test_r2, test_mae))
+    print('Test MLP results: avg_loss={:.4f}, avg_expvar={:.4f}, avg_r2score={:.4f}, avg_mae={:.4f}'.format(test_mse, test_exp_variance, test_r2, test_mae))
     print('--------------------------------------------------------------')
 
-    # for tracking the tuning information
-    minmax = '_minmax' if data_variants[0] == True else ''
-    standard = '_standard' if data_variants[1] == True else ''
-    pcafitting = '_pca' if data_variants[2] == True else ''
-    pheno = str(data_variants[3])
 
     return test_exp_variance
 
