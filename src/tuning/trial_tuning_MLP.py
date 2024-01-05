@@ -295,7 +295,7 @@ def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs,
             print('      explained_var={:.5f} | mse_loss={:.5f}'.format(obj_value2, obj_value1))
 
             # report pruned values
-            trial.report(value=obj_value1, step=fold)
+            trial.report(value=obj_value2, step=fold)
             if trial.should_prune():
                 raise optuna.exceptions.TrialPruned()
             
@@ -326,8 +326,8 @@ def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs,
     # try to return avg stop epochs
     avg_stop_epochs[trial.number] = early_stopping_point
 
-    # return current_val_expv
-    return current_val_loss
+    return current_val_expv
+    # return current_val_loss
 
 # ==============================================================
 # Call tuning function
@@ -349,7 +349,7 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict, device):
     # create an optuna tuning object, num trials default = 20
     num_trials = training_params_dict['num_trials']
     study = optuna.create_study(
-        direction="minimize",
+        direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=training_params_dict['optunaseed']),
         pruner=optuna.pruners.PercentilePruner(percentile=training_params_dict['percentile'], n_min_trials=training_params_dict['min_trials'])
     )
