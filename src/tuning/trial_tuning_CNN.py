@@ -278,7 +278,7 @@ def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs,
     # create model
     num_features = X.shape[1]
     try:
-        base_model = CNN1D(num_features=num_features, tuning_params=tuning_params_dict).to(device)
+        model = CNN1D(num_features=num_features, tuning_params=tuning_params_dict).to(device)
     except Exception as err:
         print('Trial failed. Error in model creation, {}'.format(err))
         raise optuna.exceptions.TrialPruned()
@@ -296,7 +296,7 @@ def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs,
 
         # load the unfitted model
         # model = joblib.load(pathname+model_name)
-        model = copy.deepcopy(base_model)
+        # model = copy.deepcopy(base_model)
 
         # prepare data for training and validating in each fold
         print('Fold {}: num_train_ids={}, num_val_ids={}'.format(fold, len(train_ids), len(val_ids)))
