@@ -153,7 +153,9 @@ if __name__ == '__main__':
             print('Tuning RNN with dataset pheno-{}'.format(dataset))
             print('---------------------------------------------------------\n')
             X_train, y_train, X_test, y_test = load_split_train_test_onehot(datapath, dataset)
-            model = tuning_RNN(datapath, X_train, y_train, data_variants, training_params_dict, device)
+            best_params = tuning_RNN(datapath, X_train, y_train, data_variants, training_params_dict, device)
+            evaluate_result_RNN(datapath, X_train, y_train, X_test, y_test, best_params, data_variants, device)
+
     else:
         # ----------------------------------------------------
         # Load tuned information
