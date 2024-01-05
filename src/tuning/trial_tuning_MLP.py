@@ -339,7 +339,7 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict, device):
     # for tracking the tuning information
     minmax = '_minmax' if data_variants[0] == True else ''
     standard = '_standard' if data_variants[1] == True else ''
-    pcafitting = '_pcafitting' if data_variants[2] == True else ''
+    pcafitting = '_pca' if data_variants[2] == True else ''
     pheno = str(data_variants[3])
 
     # for tracking the best validation result
@@ -360,7 +360,7 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict, device):
 
     # get early stopping num epochs
     num_avg_stop_epochs = avg_stopping_epochs[study.best_trial.number]
-
+    
     # print statistics after tuning
     print("Optuna study finished, study statistics:")
     print("  Finished trials: ", len(study.trials))
@@ -385,7 +385,6 @@ def tuning_MLP(datapath, X, y, data_variants, training_params_dict, device):
 
     return best_params
 
-    minmax = '_minmax' if data_variants[0] == True else ''
 def evaluate_result_MLP(datapath, X_train, y_train, X_test, y_test, best_params, data_variants, device):
 
     set_seeds()

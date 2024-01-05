@@ -449,7 +449,7 @@ def evaluate_result_CNN(datapath, X_train, y_train, X_test, y_test, best_params,
     pca_fitting_mode = data_variants[2]
 
     # preprocessing data
-    if data_variants[0] == 1: # minmax scaler
+    if minmax_scaler_mode == 1: # minmax scaler
         y_train, y_test = preprocess_mimax_scaler(y_train, y_test)
     # if data_variants[1] == 1: # standard scaler
     #     X_train, X_test = preprocess_standard_scaler(X_train, X_test)
