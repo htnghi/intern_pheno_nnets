@@ -418,7 +418,7 @@ def tuning_RNN(datapath, X, y, data_variants, training_params_dict, device):
     )
     
     # searching loop with objective tuning
-    study.optimize(lambda trial: objective(trial, X, y, training_params_dict, avg_stopping_epochs, device), n_trials=num_trials)
+    study.optimize(lambda trial: objective(trial, X, y, data_variants, training_params_dict, avg_stopping_epochs, device), n_trials=num_trials)
     set_seeds()
 
     # get early stopping num epochs
