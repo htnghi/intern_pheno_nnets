@@ -479,7 +479,7 @@ def evaluate_result_CNN(datapath, X_train, y_train, X_test, y_test, best_params,
     tensor_X_train, tensor_X_test = torch.swapaxes(tensor_X_train, 1, 2), torch.swapaxes(tensor_X_test, 1, 2)
 
     # define data loaders for training and testing data
-    train_loader = DataLoader(dataset=list(zp(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(dataset=list(zip(tensor_X_train, tensor_y_train)), batch_size=batch_size, shuffle=True)
     test_loader   = DataLoader(dataset=list(zip(tensor_X_test, tensor_y_test)), batch_size=batch_size, shuffle=False)
 
     # define loss function and optimizer
