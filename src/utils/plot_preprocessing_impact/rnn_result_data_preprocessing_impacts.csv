@@ -1,0 +1,13 @@
+Dataset,Experiment,Expvar,Options
+pheno1,val,0.0476,non_preproc
+pheno1,test,-1.1431,non_preproc
+pheno2,val,0.0131,non_preproc
+pheno2,test,-0.0065,non_preproc
+pheno3,val,0.0076,non_preproc
+pheno3,test,0.0013,non_preproc
+pheno1,val,0.0394,y_scaled
+pheno1,test,0.0101,y_scaled
+pheno2,val,0.0147,y_scaled
+pheno2,test,0.0153,y_scaled
+pheno3,val,0.0045,y_scaled
+pheno3,test,-0.0275,y_scaled
