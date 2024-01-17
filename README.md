@@ -1,8 +1,8 @@
-## Deep Nerual Networks for Phenotype Prediction
+## Deep Neural Networks for Phenotype Prediction
 
-This project is about trying and testing deep neural networks for predicting phenotype from genotype datasets (SNPs dataset). The target is a comparison between deep neural network models in phenotype prediction.
+This internship project is about trying and testing deep neural networks for predicting phenotype from genotype datasets (SNPs dataset). The target is a comparison between deep neural network models in phenotype prediction.
 
-### Overview - implemented models
+### Overview - Implemented Models
 So far, have done the implementation of MLP, CNN, RNN with Pytorch. All models are tuned using Optuna.
 
 - [x] MLP implemented by Pytorch with Additive Encoding
