@@ -43,42 +43,59 @@ barchart1 = sns.barplot(x='Dataset', y='Expvar', hue='Experiment', data=df_mlp_n
 barchart1.set(xlabel=None, ylabel="ExpVar", title='MLP: non_preprocessing')
 ax1.set_ylim([0.0, 1.0])
 ax1.legend(loc='upper left')
+for container in barchart1.containers:
+    barchart1.bar_label(container, fontsize=7)
 
 barchart2 = sns.barplot(x='Dataset', y='Expvar', hue='Experiment', data=df_mlp_yscaled, palette='Spectral', ax=ax2)
 barchart2.set(xlabel=None, ylabel=None, title='MLP: y_scaled')
 ax2.set_ylim([0.0, 1.0])
 ax2.legend(loc='upper left')
+for container in barchart2.containers:
+    barchart2.bar_label(container, fontsize=7)
 
 barchart3 = sns.barplot(x='Dataset', y='Expvar', hue='Experiment', data=df_mlp_xnorm_yscaled, palette='Spectral', ax=ax3)
 barchart3.set(xlabel=None, ylabel=None, title='MLP: X_norm+y_scaled')
 ax3.set_ylim([0.0, 1.0])
 ax3.legend(loc='upper left')
+for container in barchart3.containers:
+    barchart3.bar_label(container, fontsize=7)
 
 barchart4 = sns.barplot(x='Dataset', y='Expvar', hue='Experiment', data=df_mlp_xnorm_yscaled_pca, palette='Spectral', ax=ax4)
 barchart4.set(xlabel=None, ylabel=None, title='MLP: X_norm+PCA+y_scaled')
 ax4.set_ylim([0.0, 1.0])
 ax4.legend(loc='upper left')
+for container in barchart4.containers:
+    barchart4.bar_label(container, fontsize=7)
 
 # plot the cnn figure by seaborn
 barchart5 = sns.barplot(x='Dataset', y='Expvar', hue='Experiment', data=df_cnn_nonprocess, palette='Spectral', ax=ax5)
 barchart5.set(xlabel=None, ylabel="ExpVar", title='CNN: non_preprocessing')
 ax5.set_ylim([-0.4, 1.0])
 ax5.legend(loc='lower right')
+for container in barchart5.containers:
+    barchart5.bar_label(container, fontsize=7)
 
 barchart6 = sns.barplot(x='Dataset', y='Expvar', hue='Experiment', data=df_cnn_yscaled, palette='Spectral', ax=ax6)
 barchart6.set(xlabel=None, ylabel=None, title='CNN: y_scaled')
 ax6.set_ylim([-0.4, 1.0])
 ax6.legend(loc='lower right')
+for container in barchart6.containers:
+    barchart6.bar_label(container, fontsize=7)
 
 # plot the rnn figure by seaborn
 barchart7 = sns.barplot(x='Dataset', y='Expvar', hue='Experiment', data=df_rnn_nonprocess, palette='Spectral', ax=ax7)
 barchart7.set(xlabel=None, ylabel=None, title='RNN: non_preprocessing')
 ax7.set_ylim([-1.2, 0.2])
 ax7.legend(loc='lower right')
+for container in barchart7.containers:
+    barchart7.bar_label(container, fontsize=7)
 
 barchart8 = sns.barplot(x='Dataset', y='Expvar', hue='Experiment', data=df_rnn_yscaled, palette='Spectral', ax=ax8)
 barchart8.set(xlabel=None, ylabel=None, title='RNN: y_scaled')
 ax8.set_ylim([-1.2, 0.2])
 ax8.legend(loc='lower right')
+for container in barchart8.containers:
+    barchart8.bar_label(container, fontsize=7)
 
 plt.savefig('barchart_' + 'preprocessing' + '.pdf', bbox_inches='tight')
+# plt.show()

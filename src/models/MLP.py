@@ -228,7 +228,7 @@ def objective(trial, X, y, data_variants, training_params_dict, avg_stop_epochs,
         'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-2),
         'outfactor': trial.suggest_float('outfactor', 0.05, 0.7, step=0.001),
         'activation': trial.suggest_categorical('activation', ['LeakyReLU', 'ReLU', 'Tanh']),
-        'n_layers': trial.suggest_int("n_layers", 1, 5),
+        'n_layers': trial.suggest_int("n_layers", 1, 5,step=1),
         'dropout': trial.suggest_float('dropout', 0.1, 0.5, step=0.05),
         'pca': trial.suggest_float('pca', 0.75, 0.95, step=0.05)
     }
